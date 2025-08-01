@@ -168,6 +168,7 @@ export default function App() {
             component={AdminScreen} 
             options={{ headerShown: false }} 
           />
+          // نن
         </Stack.Navigator>
       </NavigationContainer>
     </LanguageContext.Provider>
