@@ -1,0 +1,323 @@
+// LoginScreen.js
+import React, { useState, useContext, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  Dimensions,
+} from 'react-native';
+import { LanguageContext } from '../App';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export default function LoginScreen({ navigation }) {
+  const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
+  const [emailOrPhone, setEmailOrPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+  
+  const getUserAccount = async (email, password) => {
+    try {
+      // Get stored users
+      const usersJson = await AsyncStorage.getItem('users');
+      if (!usersJson) {
+        return null;
+      }
+      
+      const users = JSON.parse(usersJson);
+      
+      // Find user with matching email and password
+      const user = users.find(u => 
+        (u.email === email || u.phone === email) && u.password === password
+      );
+      
+      return user || null;
+    } catch (error) {
+      console.error('Error getting user account:', error);
+      return null;
+    }
+  };
+  
+  const handleLogin = async () => {
+    if (!emailOrPhone || !password) {
+      Alert.alert(t('missingInformation'), t('enterBothFields'));
+      return;
+    }
+    
+    // Check for admin credentials
+    if (emailOrPhone === 'admin123' && password === '123') {
+      // Navigate to Admin screen and reset the navigation stack
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Admin' }],
+      });
+      return;
+    }
+    
+    // Check for hardcoded credentials (for quick access)
+    if (emailOrPhone === '123' && password === '123') {
+      Alert.alert(t('loginSuccessful'), t('welcomeToTawfeer'));
+      navigation.navigate('FoodInteraction', {
+        userData: {
+          name: t('guestUser'),
+          email: 'guest@example.com',
+          phone: '123',
+          type: t('guest'),
+        },
+        isGuest: false,
+      });
+      return;
+    }
+    
+    // Get user account
+    const userAccount = await getUserAccount(emailOrPhone, password);
+    
+    if (userAccount) {
+      Alert.alert(t('loginSuccess'), t('dataLoaded'));
+      navigation.navigate('FoodInteraction', {
+        userData: {
+          name: userAccount.name,
+          email: userAccount.email,
+          phone: userAccount.phone,
+          type: userAccount.type,
+        },
+        isGuest: false,
+        // Pass points and donation history
+        points: userAccount.points || 0,
+        donationHistory: userAccount.donationHistory || [],
+      });
+    } else {
+      Alert.alert(t('loginFailed'), t('invalidCredentials'));
+    }
+  };
+  
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -200}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          contentContainerStyle={[
+            styles.scroll, 
+            { paddingBottom: keyboardHeight + 20 }
+          ]}
+        >
+          {/* Logo/Icon Section */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>🍽️</Text>
+            </View>
+            <Text style={styles.appName}>Tawfeer</Text>
+            <Text style={styles.tagline}>{t('loginSubtitle')}</Text>
+          </View>
+          
+          {/* Login Form */}
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>{t('login')}</Text>
+            
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('emailOrPhone')}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={t('enterEmailOrPhone')}
+                value={emailOrPhone}
+                onChangeText={setEmailOrPhone}
+                keyboardType="default"
+                autoCapitalize="none"
+                placeholderTextColor="#888"
+              />
+            </View>
+            
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('password')}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={t('enterPassword')}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholderTextColor="#888"
+              />
+            </View>
+            
+            <TouchableOpacity style={styles.forgotPasswordButton}>
+              <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+              <Text style={styles.loginButtonText}>{t('login')}</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>{t('dontHaveAccount')}</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={styles.registerLink}>{t('register')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>{t('madeWithLove')}</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingTop: 60,
+    paddingHorizontal: 25,
+    paddingBottom: 30,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2e8b57',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  logoText: {
+    fontSize: 40,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2e8b57',
+    marginBottom: 5,
+  },
+  tagline: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  formContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 25,
+    color: '#333',
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 15,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+    color: '#333',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 25,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: '500',
+  },
+  loginButton: {
+    backgroundColor: '#2196F3',
+    padding: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  registerText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  registerLink: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
+  footer: {
+    marginTop: 30,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#999',
+  },
+});
