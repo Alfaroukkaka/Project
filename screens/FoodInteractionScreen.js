@@ -16,6 +16,7 @@ import {
   useColorScheme,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -57,6 +58,14 @@ export default function FoodInteractionScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState(16);
+  const [activeOrders, setActiveOrders] = useState(route.params.activeOrders || []);
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showApprovalNotification, setShowApprovalNotification] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState('');
+  const [messages, setMessages] = useState(route.params.messages || []);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
   
   const [editedUserData, setEditedUserData] = useState({
     name: userData.name || '',
@@ -74,20 +83,45 @@ export default function FoodInteractionScreen() {
   // Load user data on component mount
   useEffect(() => {
     loadUserData();
+    checkForApprovalNotification();
   }, []);
   
   // Save user data when points or donation history changes
   useEffect(() => {
     saveUserData();
-  }, [points, donationHistory]);
+  }, [points, donationHistory, activeOrders, messages]);
   
   // Load user data from AsyncStorage
   const loadUserData = async () => {
     try {
+      // First check if we have user data from route params
+      if (route.params.userData && !isGuest) {
+        const { userData } = route.params;
+        
+        // Try to load from AsyncStorage using user email
+        if (userData.email) {
+          const usersJson = await AsyncStorage.getItem('users');
+          if (usersJson) {
+            const users = JSON.parse(usersJson);
+            const user = users.find(u => u.email === userData.email);
+            
+            if (user) {
+              setPoints(user.points || 0);
+              setDonationHistory(user.donationHistory || []);
+              setActiveOrders(user.activeOrders || []);
+              setMessages(user.messages || []);
+              return;
+            }
+          }
+        }
+      }
+      
       // If we have points and donation history from route params, use those
       if (route.params.points !== undefined && route.params.donationHistory !== undefined) {
         setPoints(route.params.points);
         setDonationHistory(route.params.donationHistory);
+        setActiveOrders(route.params.activeOrders || []);
+        setMessages(route.params.messages || []);
         return;
       }
       
@@ -101,11 +135,73 @@ export default function FoodInteractionScreen() {
           if (user) {
             setPoints(user.points || 0);
             setDonationHistory(user.donationHistory || []);
+            setActiveOrders(user.activeOrders || []);
+            setMessages(user.messages || []);
           }
         }
       }
     } catch (error) {
       console.error('Error loading user data:', error);
+    }
+  };
+  
+  // Check for approval notifications
+  const checkForApprovalNotification = async () => {
+    try {
+      if (userData.email) {
+        const usersJson = await AsyncStorage.getItem('users');
+        if (usersJson) {
+          const users = JSON.parse(usersJson);
+          const user = users.find(u => u.email === userData.email);
+          
+          if (user && user.activeOrders) {
+            // Check if any order was approved since last visit
+            const approvedOrders = user.activeOrders.filter(
+              order => order.status === 'approved' && order.justApproved
+            );
+            
+            if (approvedOrders.length > 0) {
+              // Get the most recently approved order
+              const latestOrder = approvedOrders.sort(
+                (a, b) => new Date(b.approvedAt) - new Date(a.approvedAt)
+              )[0];
+              
+              setApprovalMessage(`Your ${latestOrder.type} has been approved! Driver: ${latestOrder.driverName}`);
+              setShowApprovalNotification(true);
+              
+              // Mark orders as seen
+              const updatedOrders = user.activeOrders.map(order => ({
+                ...order,
+                justApproved: false
+              }));
+              
+              user.activeOrders = updatedOrders;
+              users[users.findIndex(u => u.email === userData.email)] = user;
+              await AsyncStorage.setItem('users', JSON.stringify(users));
+              
+              // Add message to messages list
+              const newMessage = {
+                id: Date.now(),
+                type: 'approval',
+                title: 'Order Approved',
+                content: `Your ${latestOrder.type} has been approved!`,
+                orderId: latestOrder.id,
+                timestamp: new Date().toISOString(),
+                read: false
+              };
+              
+              const updatedMessages = [...user.messages, newMessage];
+              user.messages = updatedMessages;
+              users[users.findIndex(u => u.email === userData.email)] = user;
+              await AsyncStorage.setItem('users', JSON.stringify(users));
+              
+              setMessages(updatedMessages);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for approval notifications:', error);
     }
   };
   
@@ -123,6 +219,8 @@ export default function FoodInteractionScreen() {
             // Update user's points and donation history
             users[userIndex].points = points;
             users[userIndex].donationHistory = donationHistory;
+            users[userIndex].activeOrders = activeOrders;
+            users[userIndex].messages = messages;
             users[userIndex].lastUpdated = new Date().toISOString();
             
             // Save updated users array
@@ -135,6 +233,8 @@ export default function FoodInteractionScreen() {
       const sessionData = {
         points,
         donationHistory,
+        activeOrders,
+        messages,
         lastUpdated: new Date().toISOString(),
       };
       await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
@@ -152,11 +252,67 @@ export default function FoodInteractionScreen() {
     }
   };
   
+  // Mark message as read
+  const markMessageAsRead = async (messageId) => {
+    const updatedMessages = messages.map(msg => 
+      msg.id === messageId ? { ...msg, read: true } : msg
+    );
+    setMessages(updatedMessages);
+    
+    // Update in AsyncStorage
+    if (userData.email && !isGuest) {
+      try {
+        const usersJson = await AsyncStorage.getItem('users');
+        if (usersJson) {
+          const users = JSON.parse(usersJson);
+          const userIndex = users.findIndex(u => u.email === userData.email);
+          
+          if (userIndex !== -1) {
+            users[userIndex].messages = updatedMessages;
+            await AsyncStorage.setItem('users', JSON.stringify(users));
+          }
+        }
+      } catch (error) {
+        console.error('Error updating messages:', error);
+      }
+    }
+  };
+  
+  // Handle marking order as done
+  const handleMarkAsDone = async (orderId) => {
+    try {
+      // Update the order to mark as acknowledged
+      const updatedOrders = activeOrders.map(order => 
+        order.id === orderId ? { ...order, acknowledged: true } : order
+      );
+      setActiveOrders(updatedOrders);
+      
+      // Update in AsyncStorage
+      if (userData.email && !isGuest) {
+        const usersJson = await AsyncStorage.getItem('users');
+        if (usersJson) {
+          const users = JSON.parse(usersJson);
+          const userIndex = users.findIndex(u => u.email === userData.email);
+          
+          if (userIndex !== -1) {
+            users[userIndex].activeOrders = updatedOrders;
+            await AsyncStorage.setItem('users', JSON.stringify(users));
+          }
+        }
+      }
+      
+      // Show confirmation
+      Alert.alert('Order Completed', 'Thank you for your contribution!');
+    } catch (error) {
+      console.error('Error marking order as done:', error);
+    }
+  };
+  
   // Apply dark mode styles with RTL support
   const dynamicStyles = {
     background: { flex: 1, resizeMode: 'cover' },
     container: { 
-      paddingTop: 60,       // Increased top padding from 20 to 60
+      paddingTop: 60,       
       paddingHorizontal: 20, 
       paddingBottom: 20, 
       backgroundColor: darkMode ? 'rgba(18,18,18,0.9)' : 'rgba(255,255,255,0.9)',
@@ -317,6 +473,335 @@ export default function FoodInteractionScreen() {
       color: darkMode ? '#ccc' : '#555',
       fontSize: fontSize,
       textAlign: isRTL ? 'right' : 'left',
+    },
+    
+    // Process Tracker Styles
+    processTrackerContainer: {
+      marginTop: 20,
+      marginBottom: 30,
+    },
+    processTrackerTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 15,
+      textAlign: 'center',
+    },
+    processTracker: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      marginBottom: 10,
+    },
+    processStepContainer: {
+      alignItems: 'center',
+      width: 80,
+    },
+    processStepCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 5,
+    },
+    processStepActive: {
+      backgroundColor: '#4CAF50',
+    },
+    processStepPending: {
+      backgroundColor: '#ccc',
+    },
+    processStepCompleted: {
+      backgroundColor: '#2196F3',
+    },
+    processStepText: {
+      fontSize: 12,
+      color: darkMode ? '#fff' : '#333',
+      textAlign: 'center',
+    },
+    processLine: {
+      height: 2,
+      backgroundColor: '#ccc',
+      position: 'absolute',
+      top: 20,
+      left: 60,
+      right: 60,
+      zIndex: -1,
+    },
+    processLineActive: {
+      backgroundColor: '#4CAF50',
+    },
+    processLineCompleted: {
+      backgroundColor: '#2196F3',
+    },
+    
+    // Done Button Styles
+    doneButton: {
+      backgroundColor: '#4CAF50',
+      padding: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+      marginTop: 15,
+    },
+    doneButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: 16,
+    },
+    
+    // Active Orders Styles
+    activeOrdersContainer: {
+      marginTop: 20,
+      marginBottom: 20,
+    },
+    activeOrdersTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 15,
+      textAlign: 'center',
+    },
+    orderCard: {
+      backgroundColor: darkMode ? '#2C2C2C' : '#fff',
+      borderRadius: 10,
+      padding: 15,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: darkMode ? '#444' : '#eee',
+    },
+    orderHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    orderTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    orderDate: {
+      fontSize: 12,
+      color: darkMode ? '#999' : '#666',
+    },
+    orderDetails: {
+      marginTop: 10,
+    },
+    orderDetail: {
+      flexDirection: 'row',
+      marginBottom: 5,
+    },
+    orderLabel: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      color: darkMode ? '#ccc' : '#666',
+      width: 100,
+    },
+    orderValue: {
+      fontSize: 14,
+      color: darkMode ? '#fff' : '#333',
+      flex: 1,
+    },
+    orderStatus: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      marginTop: 10,
+      textAlign: 'right',
+    },
+    statusPending: {
+      color: '#FF9800',
+    },
+    statusApproved: {
+      color: '#4CAF50',
+    },
+    statusCompleted: {
+      color: '#2196F3',
+    },
+    statusRejected: {
+      color: '#F44336',
+    },
+    viewDetailsButton: {
+      backgroundColor: '#2196F3',
+      padding: 8,
+      borderRadius: 6,
+      alignItems: 'center',
+      marginTop: 10,
+    },
+    viewDetailsButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: 14,
+    },
+    
+    // Order Details Modal Styles
+    orderDetailsModal: {
+      backgroundColor: darkMode ? '#1E1E1E' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      paddingBottom: 30,
+      maxHeight: '90%',
+    },
+    orderDetailsHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: darkMode ? '#333' : '#eee',
+    },
+    orderDetailsTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    orderDetailsContent: {
+      marginBottom: 20,
+    },
+    orderDetailsSection: {
+      marginBottom: 15,
+    },
+    orderDetailsSectionTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 10,
+    },
+    orderDetailsText: {
+      fontSize: 14,
+      color: darkMode ? '#ccc' : '#666',
+      marginBottom: 5,
+    },
+    orderDetailsImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: 10,
+      marginBottom: 15,
+    },
+    
+    // Approval Notification Modal
+    approvalNotificationModal: {
+      backgroundColor: darkMode ? '#1E1E1E' : 'white',
+      borderRadius: 20,
+      padding: 25,
+      marginHorizontal: 20,
+      alignItems: 'center',
+    },
+    approvalNotificationTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: '#4CAF50',
+      marginBottom: 15,
+      textAlign: 'center',
+    },
+    approvalNotificationMessage: {
+      fontSize: 16,
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    approvalNotificationButton: {
+      backgroundColor: '#4CAF50',
+      padding: 12,
+      borderRadius: 10,
+      width: '100%',
+      alignItems: 'center',
+    },
+    approvalNotificationButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: 16,
+    },
+    
+    // Messages Styles
+    messagesSection: {
+      marginTop: 20,
+      marginBottom: 20,
+    },
+    messagesTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 15,
+      textAlign: 'center',
+    },
+    messageCard: {
+      backgroundColor: darkMode ? '#2C2C2C' : '#fff',
+      borderRadius: 10,
+      padding: 15,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: darkMode ? '#444' : '#eee',
+    },
+    messageHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 5,
+    },
+    messageTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    messageDate: {
+      fontSize: 12,
+      color: darkMode ? '#999' : '#666',
+    },
+    messageContent: {
+      fontSize: 14,
+      color: darkMode ? '#ccc' : '#666',
+      marginBottom: 10,
+    },
+    unreadIndicator: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#4CAF50',
+      position: 'absolute',
+      top: 10,
+      right: 10,
+    },
+    
+    // Message Details Modal
+    messageDetailsModal: {
+      backgroundColor: darkMode ? '#1E1E1E' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      paddingBottom: 30,
+      maxHeight: '80%',
+    },
+    messageDetailsHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: darkMode ? '#333' : '#eee',
+    },
+    messageDetailsTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    messageDetailsContent: {
+      marginBottom: 20,
+    },
+    messageDetailsSection: {
+      marginBottom: 15,
+    },
+    messageDetailsSectionTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 10,
+    },
+    messageDetailsText: {
+      fontSize: 14,
+      color: darkMode ? '#ccc' : '#666',
+      marginBottom: 5,
     },
     
     // Modal Styles
@@ -778,26 +1263,39 @@ export default function FoodInteractionScreen() {
       Alert.alert(t('missingInfo'), t('pleaseFillAll'));
       return;
     }
+    
     Alert.alert(t('donationSuccess'), t('donationSuccessMsg'));
-    const historyItem = {
+    
+    const orderItem = {
       id: Date.now(),
+      type: 'donation',
       people,
       isNew,
       isConsumable,
       location,
       phone,
       date: new Date().toLocaleString(),
-      status: 'Pending',
-      estimatedPickup: new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleString(),
-      driverName: 'Ahmed',
-      driverPhone: '+971-50-123-4567',
+      status: 'pending', // pending, approved, completed, rejected
+      acknowledged: false, // New flag to track if user has acknowledged completion
+      estimatedPickup: '',
+      driverName: '',
+      driverPhone: '',
       foodType: isNew ? 'Prepared Food' : 'Leftovers',
       weight: Math.floor(Math.random() * 10) + 1 + ' kg',
+      imageUri: imageUri,
+      userName: userData.name,
+      userEmail: userData.email,
     };
     
-    // Update donation history and points
+    // Add to active orders
+    setActiveOrders(prevOrders => [orderItem, ...prevOrders]);
+    
+    // Add to donation history
+    const historyItem = {
+      ...orderItem,
+      pointsEarned: 0, // Points will be added when approved
+    };
     setDonationHistory(prevHistory => [historyItem, ...prevHistory]);
-    setPoints(prevPoints => prevPoints + 20);
     
     // Reset form
     setMode(null);
@@ -814,7 +1312,30 @@ export default function FoodInteractionScreen() {
       Alert.alert(t('missingInfo'), t('pleaseFillAll'));
       return;
     }
+    
     Alert.alert(t('requestSuccess'), t('requestSuccessMsg'));
+    
+    const orderItem = {
+      id: Date.now(),
+      type: 'request',
+      people: requestPeople,
+      reason: requestReason,
+      location,
+      phone,
+      date: new Date().toLocaleString(),
+      status: 'pending', // pending, approved, completed, rejected
+      acknowledged: false, // New flag to track if user has acknowledged completion
+      estimatedDelivery: '',
+      driverName: '',
+      driverPhone: '',
+      userName: userData.name,
+      userEmail: userData.email,
+    };
+    
+    // Add to active orders
+    setActiveOrders(prevOrders => [orderItem, ...prevOrders]);
+    
+    // Reset form
     setMode(null);
     setRequestReason('');
     setRequestPeople('');
@@ -857,15 +1378,15 @@ export default function FoodInteractionScreen() {
     }
   };
   
-  // Logout function that clears stored session data
+  // Logout function that clears only session data but preserves user data
   const handleLogout = async () => {
     try {
       // Clear only session data, not account data
+      // We're not clearing activeOrders and messages from AsyncStorage
       await AsyncStorage.removeItem('userData');
       
-      // Reset local state
-      setPoints(0);
-      setDonationHistory([]);
+      // Reset local state for session-specific data
+      // But keep activeOrders and messages as they are saved in AsyncStorage
       setProfileImage(null);
       
       // Close settings modal
@@ -956,6 +1477,259 @@ export default function FoodInteractionScreen() {
     setFontSize(size);
   };
   
+  const handleViewOrderDetails = (order) => {
+    setSelectedOrder(order);
+    setShowOrderDetails(true);
+  };
+  
+  const handleMessageDetails = (message) => {
+    setSelectedMessage(message);
+    
+    // Mark message as read
+    const updatedMessages = messages.map(msg => 
+      msg.id === message.id ? { ...msg, read: true } : msg
+    );
+    setMessages(updatedMessages);
+    
+    // Update in AsyncStorage
+    if (userData.email && !isGuest) {
+      const updateMessagesInStorage = async () => {
+        try {
+          const usersJson = await AsyncStorage.getItem('users');
+          if (usersJson) {
+            const users = JSON.parse(usersJson);
+            const userIndex = users.findIndex(u => u.email === userData.email);
+            
+            if (userIndex !== -1) {
+              users[userIndex].messages = updatedMessages;
+              await AsyncStorage.setItem('users', JSON.stringify(users));
+            }
+          }
+        } catch (error) {
+          console.error('Error updating messages:', error);
+        }
+      };
+      
+      updateMessagesInStorage();
+    }
+    
+    setShowMessageModal(true);
+  };
+  
+  const renderProcessTracker = (order) => {
+    if (!order) return null;
+    
+    const steps = [
+      { id: 1, label: 'Submitted', active: true },
+      { id: 2, label: 'Approved', active: order.status === 'approved' || order.status === 'completed' },
+      { id: 3, label: 'Completed', active: order.status === 'completed' },
+    ];
+    
+    return (
+      <View style={dynamicStyles.processTrackerContainer}>
+        <Text style={dynamicStyles.processTrackerTitle}>Order Status</Text>
+        <View style={dynamicStyles.processTracker}>
+          <View style={[
+            dynamicStyles.processLine,
+            order.status === 'pending' && dynamicStyles.processLineActive,
+            order.status === 'completed' && dynamicStyles.processLineCompleted
+          ]} />
+          {steps.map((step, index) => (
+            <View key={step.id} style={dynamicStyles.processStepContainer}>
+              <View style={[
+                dynamicStyles.processStepCircle,
+                step.active ? dynamicStyles.processStepActive : dynamicStyles.processStepPending,
+                order.status === 'completed' && step.active && dynamicStyles.processStepCompleted
+              ]}>
+                <Text style={dynamicStyles.processStepText}>{step.id}</Text>
+              </View>
+              <Text style={dynamicStyles.processStepText}>{step.label}</Text>
+            </View>
+          ))}
+        </View>
+        
+        {/* Show Done button for completed orders that haven't been acknowledged */}
+        {order.status === 'completed' && !order.acknowledged && (
+          <TouchableOpacity 
+            style={dynamicStyles.doneButton}
+            onPress={() => handleMarkAsDone(order.id)}
+          >
+            <Text style={dynamicStyles.doneButtonText}>Done</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+  
+  const renderOrderItem = ({ item }) => {
+    let statusStyle = dynamicStyles.statusPending;
+    let statusText = 'Pending';
+    
+    if (item.status === 'approved') {
+      statusStyle = dynamicStyles.statusApproved;
+      statusText = 'Approved';
+    } else if (item.status === 'completed') {
+      statusStyle = dynamicStyles.statusCompleted;
+      statusText = 'Completed';
+    } else if (item.status === 'rejected') {
+      statusStyle = dynamicStyles.statusRejected;
+      statusText = 'Rejected';
+    }
+    
+    return (
+      <TouchableOpacity 
+        style={dynamicStyles.orderCard} 
+        onPress={() => handleViewOrderDetails(item)}
+      >
+        <View style={dynamicStyles.orderHeader}>
+          <Text style={dynamicStyles.orderTitle}>
+            {item.type === 'donation' ? 'Donation' : 'Request'} #{item.id}
+          </Text>
+          <Text style={dynamicStyles.orderDate}>{item.date}</Text>
+        </View>
+        
+        <View style={dynamicStyles.orderDetails}>
+          <View style={dynamicStyles.orderDetail}>
+            <Text style={dynamicStyles.orderLabel}>Type:</Text>
+            <Text style={dynamicStyles.orderValue}>
+              {item.type === 'donation' ? 'Food Donation' : 'Food Request'}
+            </Text>
+          </View>
+          
+          {item.type === 'donation' && (
+            <View style={dynamicStyles.orderDetail}>
+              <Text style={dynamicStyles.orderLabel}>Food Type:</Text>
+              <Text style={dynamicStyles.orderValue}>{item.foodType}</Text>
+            </View>
+          )}
+          
+          {item.type === 'request' && (
+            <View style={dynamicStyles.orderDetail}>
+              <Text style={dynamicStyles.orderLabel}>Reason:</Text>
+              <Text style={dynamicStyles.orderValue}>{item.reason}</Text>
+            </View>
+          )}
+          
+          <View style={dynamicStyles.orderDetail}>
+            <Text style={dynamicStyles.orderLabel}>People:</Text>
+            <Text style={dynamicStyles.orderValue}>{item.people}</Text>
+          </View>
+          
+          <View style={dynamicStyles.orderDetail}>
+            <Text style={dynamicStyles.orderLabel}>Location:</Text>
+            <Text style={dynamicStyles.orderValue}>{item.location}</Text>
+          </View>
+          
+          <Text style={[dynamicStyles.orderStatus, statusStyle]}>{statusText}</Text>
+        </View>
+        
+        <TouchableOpacity style={dynamicStyles.viewDetailsButton}>
+          <Text style={dynamicStyles.viewDetailsButtonText}>View Details</Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+  
+  const renderMessageItem = ({ item }) => (
+    <TouchableOpacity 
+      style={dynamicStyles.messageCard} 
+      onPress={() => handleMessageDetails(item)}
+    >
+      {!item.read && <View style={dynamicStyles.unreadIndicator} />}
+      <View style={dynamicStyles.messageHeader}>
+        <Text style={dynamicStyles.messageTitle}>{item.title}</Text>
+        <Text style={dynamicStyles.messageDate}>
+          {new Date(item.timestamp).toLocaleDateString()}
+        </Text>
+      </View>
+      <Text style={dynamicStyles.messageContent}>{item.content}</Text>
+    </TouchableOpacity>
+  );
+  
+  const renderMessageDetailsModal = () => (
+    <Modal visible={showMessageModal} animationType="slide" transparent>
+      <View style={dynamicStyles.modalOverlay}>
+        <View style={dynamicStyles.messageDetailsModal}>
+          <View style={dynamicStyles.messageDetailsHeader}>
+            <Text style={dynamicStyles.messageDetailsTitle}>
+              {selectedMessage?.title}
+            </Text>
+            <TouchableOpacity onPress={() => setShowMessageModal(false)}>
+              <Ionicons name="close" size={24} color={darkMode ? "#fff" : "#333"} />
+            </TouchableOpacity>
+          </View>
+          
+          {selectedMessage && (
+            <ScrollView style={dynamicStyles.messageDetailsContent}>
+              <View style={dynamicStyles.messageDetailsSection}>
+                <Text style={dynamicStyles.messageDetailsSectionTitle}>Message Details</Text>
+                <Text style={dynamicStyles.messageDetailsText}>
+                  Type: {selectedMessage.type}
+                </Text>
+                <Text style={dynamicStyles.messageDetailsText}>
+                  Date: {new Date(selectedMessage.timestamp).toLocaleString()}
+                </Text>
+              </View>
+              
+              <View style={dynamicStyles.messageDetailsSection}>
+                <Text style={dynamicStyles.messageDetailsSectionTitle}>Content</Text>
+                <Text style={dynamicStyles.messageDetailsText}>
+                  {selectedMessage.content}
+                </Text>
+              </View>
+              
+              {selectedMessage.orderId && (
+                <View style={dynamicStyles.messageDetailsSection}>
+                  <Text style={dynamicStyles.messageDetailsSectionTitle}>Related Order</Text>
+                  <Text style={dynamicStyles.messageDetailsText}>
+                    Order ID: #{selectedMessage.orderId}
+                  </Text>
+                  <TouchableOpacity 
+                    style={dynamicStyles.viewDetailsButton}
+                    onPress={() => {
+                      const order = activeOrders.find(o => o.id === selectedMessage.orderId);
+                      if (order) {
+                        setShowMessageModal(false);
+                        setSelectedOrder(order);
+                        setShowOrderDetails(true);
+                      }
+                    }}
+                  >
+                    <Text style={dynamicStyles.viewDetailsButtonText}>View Order Details</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {/* Add OK button for completion messages */}
+              {selectedMessage.type === 'completion' && (
+                <TouchableOpacity 
+                  style={dynamicStyles.approvalNotificationButton}
+                  onPress={() => {
+                    markMessageAsRead(selectedMessage.id);
+                    setShowMessageModal(false);
+                  }}
+                >
+                  <Text style={dynamicStyles.approvalNotificationButtonText}>OK</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+  
+  // Get the most recent unacknowledged order for the process tracker
+  const getMostRecentUnacknowledgedOrder = () => {
+    const unacknowledgedOrders = activeOrders.filter(order => !order.acknowledged);
+    if (unacknowledgedOrders.length === 0) return null;
+    
+    // Return the most recent order (highest ID)
+    return unacknowledgedOrders.reduce((prev, current) => 
+      prev.id > current.id ? prev : current
+    );
+  };
+  
   return (
     <KeyboardAvoidingView 
       style={{flex: 1}} 
@@ -986,6 +1760,37 @@ export default function FoodInteractionScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          
+          {/* Only show process tracker and orders when not in donate/request mode */}
+          {!mode && (
+            renderProcessTracker(getMostRecentUnacknowledgedOrder())
+          )}
+          
+          {!mode && activeOrders.filter(order => !order.acknowledged).length > 0 && (
+            <View style={dynamicStyles.activeOrdersContainer}>
+              <Text style={dynamicStyles.activeOrdersTitle}>Active Orders</Text>
+              <FlatList
+                data={activeOrders.filter(order => !order.acknowledged)}
+                renderItem={renderOrderItem}
+                keyExtractor={item => item.id.toString()}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+          )}
+          
+          {/* Messages section - only show unread messages */}
+          {!mode && messages.filter(msg => !msg.read).length > 0 && (
+            <View style={dynamicStyles.messagesSection}>
+              <Text style={dynamicStyles.messagesTitle}>Messages</Text>
+              <FlatList
+                data={messages.filter(msg => !msg.read)}
+                renderItem={renderMessageItem}
+                keyExtractor={item => item.id.toString()}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+          )}
+          
           {!mode && (
             <>
               <Text style={dynamicStyles.title}>{t('wouldYouLikeTo')}</Text>
@@ -997,6 +1802,7 @@ export default function FoodInteractionScreen() {
               </TouchableOpacity>
             </>
           )}
+          
           {mode === 'donate' && (
             <View>
               <Text style={dynamicStyles.question}>{t('howManyPeople')}</Text>
@@ -1070,6 +1876,7 @@ export default function FoodInteractionScreen() {
               </TouchableOpacity>
             </View>
           )}
+          
           {mode === 'request' && (
             <View>
               <Text style={dynamicStyles.question}>{t('whyRequesting')}</Text>
@@ -1112,6 +1919,7 @@ export default function FoodInteractionScreen() {
               </TouchableOpacity>
             </View>
           )}
+          
           {/* Only show AI box and Tawfeer guide when not in donate or request mode */}
           {!mode && (
             <>
@@ -1249,6 +2057,30 @@ export default function FoodInteractionScreen() {
                     <Text style={dynamicStyles.profileName}>{userData.name || 'Guest User'}</Text>
                     <Text style={dynamicStyles.profileType}>{userData.type || 'Guest'}</Text>
                   </View>
+                  
+                  {/* Messages Section */}
+                  <TouchableOpacity 
+                    style={dynamicStyles.sectionHeader} 
+                    onPress={() => toggleSection('messagesSection')}
+                  >
+                    <Ionicons name="mail" size={18} color="#FF9800" />
+                    <Text style={dynamicStyles.sectionTitle}> Messages </Text>
+                    <Text>{activeSection === 'messagesSection' ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {activeSection === 'messagesSection' && (
+                    <View style={dynamicStyles.cardContent}>
+                      {messages.length === 0 ? (
+                        <Text style={dynamicStyles.infoTextItalic}>No messages</Text>
+                      ) : (
+                        <FlatList
+                          data={messages}
+                          renderItem={renderMessageItem}
+                          keyExtractor={item => item.id.toString()}
+                          showsVerticalScrollIndicator={false}
+                        />
+                      )}
+                    </View>
+                  )}
                   
                   {/* Language Settings */}
                   <TouchableOpacity 
@@ -1424,7 +2256,7 @@ export default function FoodInteractionScreen() {
                               <Text style={dynamicStyles.donationDetailValue}>{item.driverName} ({item.driverPhone})</Text>
                             </View>
                             
-                            <Text style={dynamicStyles.donationDetailStatus}>{t('pointsEarned')}: +20</Text>
+                            <Text style={dynamicStyles.donationDetailStatus}>{t('pointsEarned')}: +{item.pointsEarned || 0}</Text>
                           </View>
                         ))
                       )}
@@ -1566,6 +2398,139 @@ export default function FoodInteractionScreen() {
                     <Text style={dynamicStyles.logoutButtonText}>{t('logout')}</Text>
                   </TouchableOpacity>
                 </ScrollView>
+              </View>
+            </View>
+          </Modal>
+          
+          {/* Order Details Modal */}
+          <Modal visible={showOrderDetails} animationType="slide" transparent>
+            <View style={dynamicStyles.modalOverlay}>
+              <View style={dynamicStyles.orderDetailsModal}>
+                <View style={dynamicStyles.orderDetailsHeader}>
+                  <Text style={dynamicStyles.orderDetailsTitle}>
+                    {selectedOrder?.type === 'donation' ? 'Donation' : 'Request'} Details
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowOrderDetails(false)}>
+                    <Ionicons name="close" size={24} color={darkMode ? "#fff" : "#333"} />
+                  </TouchableOpacity>
+                </View>
+                
+                {selectedOrder && (
+                  <ScrollView style={dynamicStyles.orderDetailsContent}>
+                    {/* Process Tracker */}
+                    {renderProcessTracker(selectedOrder)}
+                    
+                    {/* Order Information */}
+                    <View style={dynamicStyles.orderDetailsSection}>
+                      <Text style={dynamicStyles.orderDetailsSectionTitle}>Order Information</Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Order ID: #{selectedOrder.id}
+                      </Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Date: {selectedOrder.date}
+                      </Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Status: {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                      </Text>
+                    </View>
+                    
+                    {/* User Information */}
+                    <View style={dynamicStyles.orderDetailsSection}>
+                      <Text style={dynamicStyles.orderDetailsSectionTitle}>User Information</Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Name: {selectedOrder.userName}
+                      </Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Email: {selectedOrder.userEmail}
+                      </Text>
+                    </View>
+                    
+                    {/* Order Details */}
+                    <View style={dynamicStyles.orderDetailsSection}>
+                      <Text style={dynamicStyles.orderDetailsSectionTitle}>
+                        {selectedOrder.type === 'donation' ? 'Donation' : 'Request'} Details
+                      </Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        People: {selectedOrder.people}
+                      </Text>
+                      {selectedOrder.type === 'donation' && (
+                        <>
+                          <Text style={dynamicStyles.orderDetailsText}>
+                            Food Type: {selectedOrder.foodType}
+                          </Text>
+                          <Text style={dynamicStyles.orderDetailsText}>
+                            Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
+                          </Text>
+                          <Text style={dynamicStyles.orderDetailsText}>
+                            Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
+                          </Text>
+                        </>
+                      )}
+                      {selectedOrder.type === 'request' && (
+                        <Text style={dynamicStyles.orderDetailsText}>
+                          Reason: {selectedOrder.reason}
+                        </Text>
+                      )}
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Location: {selectedOrder.location}
+                      </Text>
+                      <Text style={dynamicStyles.orderDetailsText}>
+                        Phone: {selectedOrder.phone}
+                      </Text>
+                    </View>
+                    
+                    {/* Image */}
+                    {selectedOrder.imageUri && (
+                      <View style={dynamicStyles.orderDetailsSection}>
+                        <Text style={dynamicStyles.orderDetailsSectionTitle}>Food Image</Text>
+                        <Image 
+                          source={{ uri: selectedOrder.imageUri }} 
+                          style={dynamicStyles.orderDetailsImage} 
+                        />
+                      </View>
+                    )}
+                    
+                    {/* Driver Information */}
+                    {(selectedOrder.status === 'approved' || selectedOrder.status === 'completed') && (
+                      <View style={dynamicStyles.orderDetailsSection}>
+                        <Text style={dynamicStyles.orderDetailsSectionTitle}>Driver Information</Text>
+                        <Text style={dynamicStyles.orderDetailsText}>
+                          Name: {selectedOrder.driverName || 'Not assigned yet'}
+                        </Text>
+                        <Text style={dynamicStyles.orderDetailsText}>
+                          Phone: {selectedOrder.driverPhone || 'Not assigned yet'}
+                        </Text>
+                        <Text style={dynamicStyles.orderDetailsText}>
+                          {selectedOrder.type === 'donation' ? 
+                            `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled yet'}` :
+                            `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled yet'}`
+                          }
+                        </Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+          </Modal>
+          
+          {/* Message Details Modal */}
+          {renderMessageDetailsModal()}
+          
+          {/* Approval Notification Modal */}
+          <Modal visible={showApprovalNotification} animationType="slide" transparent>
+            <View style={dynamicStyles.modalContainer}>
+              <View style={dynamicStyles.approvalNotificationModal}>
+                <Text style={dynamicStyles.approvalNotificationTitle}>Order Approved!</Text>
+                <Text style={dynamicStyles.approvalNotificationMessage}>
+                  {approvalMessage}
+                </Text>
+                <TouchableOpacity 
+                  style={dynamicStyles.approvalNotificationButton}
+                  onPress={() => setShowApprovalNotification(false)}
+                >
+                  <Text style={dynamicStyles.approvalNotificationButtonText}>OK</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </Modal>
