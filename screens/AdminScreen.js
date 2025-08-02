@@ -12,6 +12,8 @@ import {
   RefreshControl,
   Share,
   ImageBackground,
+  TextInput,
+  Button,
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
@@ -22,18 +24,23 @@ const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/000
 export default function AdminScreen({ navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
   const [users, setUsers] = useState([]);
-  const [donations, setDonations] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
-    totalDonations: 0,
+    totalOrders: 0,
     totalPoints: 0,
     activeUsers: 0,
+    pendingOrders: 0,
+    approvedOrders: 0,
+    completedOrders: 0,
   });
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [userDonations, setUserDonations] = useState([]);
-  const [showUserModal, setShowUserModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [driverName, setDriverName] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [estimatedTime, setEstimatedTime] = useState('');
   
   // Load admin data on component mount
   useEffect(() => {
@@ -49,37 +56,48 @@ export default function AdminScreen({ navigation }) {
       setUsers(usersData);
       
       // Calculate statistics
-      let totalDonations = 0;
       let totalPoints = 0;
       let activeUsers = 0;
       usersData.forEach(user => {
-        if (user.donationHistory) {
-          totalDonations += user.donationHistory.length;
-        }
         totalPoints += user.points || 0;
         if (user.points > 0) activeUsers++;
       });
-      setStats({
-        totalUsers: usersData.length,
-        totalDonations,
-        totalPoints,
-        activeUsers,
-      });
       
-      // Collect all donations
-      const allDonations = [];
+      // Collect all orders from all users
+      const allOrders = [];
+      let pendingOrders = 0;
+      let approvedOrders = 0;
+      let completedOrders = 0;
+      
       usersData.forEach(user => {
-        if (user.donationHistory) {
-          user.donationHistory.forEach(donation => {
-            allDonations.push({
-              ...donation,
+        if (user.activeOrders) {
+          user.activeOrders.forEach(order => {
+            allOrders.push({
+              ...order,
               userName: user.name,
               userEmail: user.email,
+              userPhone: user.phone,
             });
+            
+            // Count orders by status
+            if (order.status === 'pending') pendingOrders++;
+            else if (order.status === 'approved') approvedOrders++;
+            else if (order.status === 'completed') completedOrders++;
           });
         }
       });
-      setDonations(allDonations);
+      
+      setOrders(allOrders);
+      
+      setStats({
+        totalUsers: usersData.length,
+        totalOrders: allOrders.length,
+        totalPoints,
+        activeUsers,
+        pendingOrders,
+        approvedOrders,
+        completedOrders,
+      });
     } catch (error) {
       console.error('Error loading admin data:', error);
     }
@@ -92,34 +110,220 @@ export default function AdminScreen({ navigation }) {
     setRefreshing(false);
   };
   
-  // View user details
-  const viewUserDetails = (user) => {
-    setSelectedUser(user);
-    setUserDonations(user.donationHistory || []);
-    setShowUserModal(true);
+  // View order details
+  const viewOrderDetails = (order) => {
+    setSelectedOrder(order);
+    setDriverName(order.driverName || '');
+    setDriverPhone(order.driverPhone || '');
+    setEstimatedTime(
+      order.type === 'donation' ? order.estimatedPickup || '' : order.estimatedDelivery || ''
+    );
+    setShowOrderModal(true);
   };
   
-  // Delete user
-  const deleteUser = (user) => {
+  // Approve order
+  const approveOrder = async () => {
+    try {
+      // Update order status
+      const updatedOrder = {
+        ...selectedOrder,
+        status: 'approved',
+        driverName,
+        driverPhone,
+        estimatedPickup: selectedOrder.type === 'donation' ? estimatedTime : '',
+        estimatedDelivery: selectedOrder.type === 'request' ? estimatedTime : '',
+        acknowledged: false, // Reset acknowledged flag when approving
+      };
+      
+      // Get all users
+      const usersJson = await AsyncStorage.getItem('users');
+      const usersData = usersJson ? JSON.parse(usersJson) : [];
+      
+      // Find the user who made the order
+      const userIndex = usersData.findIndex(u => u.email === selectedOrder.userEmail);
+      
+      if (userIndex !== -1) {
+        // Update the order in user's active orders
+        const orderIndex = usersData[userIndex].activeOrders.findIndex(
+          o => o.id === selectedOrder.id
+        );
+        
+        if (orderIndex !== -1) {
+          usersData[userIndex].activeOrders[orderIndex] = updatedOrder;
+          
+          // Add points if it's a donation
+          if (selectedOrder.type === 'donation') {
+            usersData[userIndex].points += 20;
+            
+            // Update donation history
+            const donationIndex = usersData[userIndex].donationHistory.findIndex(
+              d => d.id === selectedOrder.id
+            );
+            
+            if (donationIndex !== -1) {
+              usersData[userIndex].donationHistory[donationIndex] = {
+                ...usersData[userIndex].donationHistory[donationIndex],
+                status: 'approved',
+                driverName,
+                driverPhone,
+                estimatedPickup: estimatedTime,
+                pointsEarned: 20,
+              };
+            }
+          }
+          
+          // Save updated users data
+          await AsyncStorage.setItem('users', JSON.stringify(usersData));
+          
+          // Close modal and refresh data
+          setShowOrderModal(false);
+          loadAdminData();
+          
+          Alert.alert('Success', 'Order has been approved successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Error approving order:', error);
+      Alert.alert('Error', 'Failed to approve order. Please try again.');
+    }
+  };
+  
+  // Complete order
+  const completeOrder = async () => {
+    try {
+      // Update order status
+      const updatedOrder = {
+        ...selectedOrder,
+        status: 'completed',
+        acknowledged: false, // Reset acknowledged flag when completing
+      };
+      
+      // Get all users
+      const usersJson = await AsyncStorage.getItem('users');
+      const usersData = usersJson ? JSON.parse(usersJson) : [];
+      
+      // Find the user who made the order
+      const userIndex = usersData.findIndex(u => u.email === selectedOrder.userEmail);
+      
+      if (userIndex !== -1) {
+        // Update the order in user's active orders
+        const orderIndex = usersData[userIndex].activeOrders.findIndex(
+          o => o.id === selectedOrder.id
+        );
+        
+        if (orderIndex !== -1) {
+          usersData[userIndex].activeOrders[orderIndex] = updatedOrder;
+          
+          // Update donation history if it's a donation
+          if (selectedOrder.type === 'donation') {
+            const donationIndex = usersData[userIndex].donationHistory.findIndex(
+              d => d.id === selectedOrder.id
+            );
+            
+            if (donationIndex !== -1) {
+              usersData[userIndex].donationHistory[donationIndex] = {
+                ...usersData[userIndex].donationHistory[donationIndex],
+                status: 'completed',
+              };
+            }
+          }
+          
+          // Add completion message
+          const completionMessage = {
+            id: Date.now(),
+            type: 'completion',
+            title: 'Order Completed',
+            content: `Your ${selectedOrder.type} order has been completed on ${new Date().toLocaleString()}. Thank you for your contribution!`,
+            orderId: selectedOrder.id,
+            timestamp: new Date().toISOString(),
+            read: false
+          };
+          
+          // Initialize messages array if it doesn't exist
+          if (!usersData[userIndex].messages) {
+            usersData[userIndex].messages = [];
+          }
+          
+          // Add the completion message
+          usersData[userIndex].messages.push(completionMessage);
+          
+          // Save updated users data
+          await AsyncStorage.setItem('users', JSON.stringify(usersData));
+          
+          // Close modal and refresh data
+          setShowOrderModal(false);
+          loadAdminData();
+          
+          Alert.alert('Success', 'Order has been marked as completed');
+        }
+      }
+    } catch (error) {
+      console.error('Error completing order:', error);
+      Alert.alert('Error', 'Failed to complete order. Please try again.');
+    }
+  };
+  
+  // Reject order
+  const rejectOrder = async () => {
     Alert.alert(
-      t('confirmDelete'),
-      `${t('deleteUser')} ${user.name}?`,
+      'Confirm Rejection',
+      'Are you sure you want to reject this order?',
       [
-        { text: t('cancel'), style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: t('delete'),
+          text: 'Reject',
           style: 'destructive',
           onPress: async () => {
             try {
+              // Update order status
+              const updatedOrder = {
+                ...selectedOrder,
+                status: 'rejected',
+              };
+              
+              // Get all users
               const usersJson = await AsyncStorage.getItem('users');
               const usersData = usersJson ? JSON.parse(usersJson) : [];
-              const updatedUsers = usersData.filter(u => u.email !== user.email);
-              await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
-              loadAdminData();
-              Alert.alert(t('success'), t('userDeleted'));
+              
+              // Find the user who made the order
+              const userIndex = usersData.findIndex(u => u.email === selectedOrder.userEmail);
+              
+              if (userIndex !== -1) {
+                // Update the order in user's active orders
+                const orderIndex = usersData[userIndex].activeOrders.findIndex(
+                  o => o.id === selectedOrder.id
+                );
+                
+                if (orderIndex !== -1) {
+                  usersData[userIndex].activeOrders[orderIndex] = updatedOrder;
+                  
+                  // Update donation history if it's a donation
+                  if (selectedOrder.type === 'donation') {
+                    const donationIndex = usersData[userIndex].donationHistory.findIndex(
+                      d => d.id === selectedOrder.id
+                    );
+                    
+                    if (donationIndex !== -1) {
+                      usersData[userIndex].donationHistory[donationIndex] = {
+                        ...usersData[userIndex].donationHistory[donationIndex],
+                        status: 'rejected',
+                      };
+                    }
+                  }
+                  
+                  // Save updated users data
+                  await AsyncStorage.setItem('users', JSON.stringify(usersData));
+                  
+                  // Close modal and refresh data
+                  setShowOrderModal(false);
+                  loadAdminData();
+                  
+                  Alert.alert('Success', 'Order has been rejected');
+                }
+              }
             } catch (error) {
-              console.error('Error deleting user:', error);
-              Alert.alert(t('error'), t('tryAgain'));
+              console.error('Error rejecting order:', error);
+              Alert.alert('Error', 'Failed to reject order. Please try again.');
             }
           },
         },
@@ -134,9 +338,12 @@ export default function AdminScreen({ navigation }) {
 ${t('adminReport')}
 ${t('generatedOn')}: ${new Date().toLocaleString()}
 ${t('totalAccounts')}: ${stats.totalUsers}
-${t('totalDonations')}: ${stats.totalDonations}
+${t('totalOrders')}: ${stats.totalOrders}
 ${t('totalPoints')}: ${stats.totalPoints}
 ${t('activeUsers')}: ${stats.activeUsers}
+Pending Orders: ${stats.pendingOrders}
+Approved Orders: ${stats.approvedOrders}
+Completed Orders: ${stats.completedOrders}
 ${t('topUsers')}:
 ${users
   .sort((a, b) => (b.points || 0) - (a.points || 0))
@@ -176,6 +383,132 @@ ${users
     );
   };
   
+  // Render order item
+  const renderOrderItem = ({ item }) => {
+    let statusColor = '#FF9800'; // Default: pending
+    let statusText = 'Pending';
+    
+    if (item.status === 'approved') {
+      statusColor = '#4CAF50';
+      statusText = 'Approved';
+    } else if (item.status === 'completed') {
+      statusColor = '#2196F3';
+      statusText = 'Completed';
+    } else if (item.status === 'rejected') {
+      statusColor = '#F44336';
+      statusText = 'Rejected';
+    }
+    
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <View style={styles.orderTypeContainer}>
+            <Text style={styles.orderType}>
+              {item.type === 'donation' ? 'Donation' : 'Request'}
+            </Text>
+            <Text style={styles.orderId}>#{item.id}</Text>
+          </View>
+          <View style={styles.orderStatusContainer}>
+            <Text style={[styles.orderStatus, { color: statusColor }]}>
+              {statusText}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.orderDetails}>
+          <View style={styles.orderDetail}>
+            <Text style={styles.orderLabel}>User:</Text>
+            <Text style={styles.orderValue}>{item.userName}</Text>
+          </View>
+          
+          <View style={styles.orderDetail}>
+            <Text style={styles.orderLabel}>Contact:</Text>
+            <Text style={styles.orderValue}>{item.userPhone}</Text>
+          </View>
+          
+          <View style={styles.orderDetail}>
+            <Text style={styles.orderLabel}>People:</Text>
+            <Text style={styles.orderValue}>{item.people}</Text>
+          </View>
+          
+          <View style={styles.orderDetail}>
+            <Text style={styles.orderLabel}>Location:</Text>
+            <Text style={styles.orderValue}>{item.location}</Text>
+          </View>
+          
+          {item.type === 'donation' && (
+            <View style={styles.orderDetail}>
+              <Text style={styles.orderLabel}>Food Type:</Text>
+              <Text style={styles.orderValue}>{item.foodType}</Text>
+            </View>
+          )}
+          
+          {item.type === 'request' && (
+            <View style={styles.orderDetail}>
+              <Text style={styles.orderLabel}>Reason:</Text>
+              <Text style={styles.orderValue}>{item.reason}</Text>
+            </View>
+          )}
+          
+          <View style={styles.orderDetail}>
+            <Text style={styles.orderLabel}>Date:</Text>
+            <Text style={styles.orderValue}>{item.date}</Text>
+          </View>
+        </View>
+        
+        {item.imageUri && (
+          <Image source={{ uri: item.imageUri }} style={styles.orderImage} />
+        )}
+        
+        <View style={styles.orderActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.viewButton]}
+            onPress={() => viewOrderDetails(item)}
+          >
+            <Ionicons name="eye" size={16} color="#fff" />
+            <Text style={styles.actionButtonText}>View</Text>
+          </TouchableOpacity>
+          
+          {item.status === 'pending' && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={() => viewOrderDetails(item)}
+              >
+                <Ionicons name="checkmark" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Approve</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => {
+                  setSelectedOrder(item);
+                  rejectOrder();
+                }}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          
+          {item.status === 'approved' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.completeButton]}
+              onPress={() => {
+                setSelectedOrder(item);
+                completeOrder();
+              }}
+            >
+              <Ionicons name="checkmark-done" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Complete</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+  
   // Render user item
   const renderUserItem = ({ item }) => (
     <View style={styles.userCard}>
@@ -190,57 +523,9 @@ ${users
         </View>
         <View style={styles.userStats}>
           <Text style={styles.userPoints}>{item.points || 0} {t('points')}</Text>
-          <Text style={styles.userDonations}>
-            {item.donationHistory ? item.donationHistory.length : 0} {t('donations')}
+          <Text style={styles.userOrders}>
+            {item.activeOrders ? item.activeOrders.length : 0} {t('orders')}
           </Text>
-        </View>
-      </View>
-      <View style={styles.userActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.viewButton]}
-          onPress={() => viewUserDetails(item)}
-        >
-          <Ionicons name="eye" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>{t('view')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => deleteUser(item)}
-        >
-          <Ionicons name="trash" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>{t('delete')}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-  
-  // Render donation item
-  const renderDonationItem = ({ item }) => (
-    <View style={styles.donationCard}>
-      <View style={styles.donationHeader}>
-        <Text style={styles.donationTitle}>{t('donation')} #{item.id}</Text>
-        <Text style={styles.donationDate}>{item.date}</Text>
-      </View>
-      <View style={styles.donationDetails}>
-        <View style={styles.donationDetail}>
-          <Text style={styles.donationLabel}>{t('user')}:</Text>
-          <Text style={styles.donationValue}>{item.userName}</Text>
-        </View>
-        <View style={styles.donationDetail}>
-          <Text style={styles.donationLabel}>{t('peopleServed')}:</Text>
-          <Text style={styles.donationValue}>{item.people}</Text>
-        </View>
-        <View style={styles.donationDetail}>
-          <Text style={styles.donationLabel}>{t('foodType')}:</Text>
-          <Text style={styles.donationValue}>{item.foodType}</Text>
-        </View>
-        <View style={styles.donationDetail}>
-          <Text style={styles.donationLabel}>{t('location')}:</Text>
-          <Text style={styles.donationValue}>{item.location}</Text>
-        </View>
-        <View style={styles.donationDetail}>
-          <Text style={styles.donationLabel}>{t('status')}:</Text>
-          <Text style={[styles.donationValue, { color: '#4CAF50' }]}>{item.status}</Text>
         </View>
       </View>
     </View>
@@ -251,16 +536,15 @@ ${users
       <View style={[styles.container, { backgroundColor: darkMode ? 'rgba(18,18,18,0.85)' : 'rgba(245,245,245,0.85)' }]}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
-          <View style={styles.headerActions}>
+          <View style={styles.headerLeft}>
             <TouchableOpacity onPress={shareReport} style={styles.headerButton}>
               <Ionicons name="share" size={24} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout} style={styles.headerButton}>
-              <Ionicons name="log-out" size={24} color="#fff" />
+          </View>
+          <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+              <Text style={styles.logoutButtonText}>{t('logout')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -272,7 +556,62 @@ ${users
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* Users Section - Now at the top */}
+          {/* Stats Cards */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.statsContainer}
+          >
+            <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
+              <FontAwesome5 name="users" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalUsers}</Text>
+              <Text style={styles.statLabel}>{t('totalAccounts')}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
+              <FontAwesome5 name="clipboard-list" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalOrders}</Text>
+              <Text style={styles.statLabel}>Total Orders</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
+              <FontAwesome5 name="clock" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.pendingOrders}</Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
+              <FontAwesome5 name="check-circle" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.approvedOrders}</Text>
+              <Text style={styles.statLabel}>Approved</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
+              <FontAwesome5 name="check-double" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.completedOrders}</Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
+              <FontAwesome5 name="star" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalPoints}</Text>
+              <Text style={styles.statLabel}>{t('totalPoints')}</Text>
+            </View>
+          </ScrollView>
+          
+          {/* Orders Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>All Orders</Text>
+              <Text style={styles.sectionCount}>({orders.length})</Text>
+            </View>
+            <FlatList
+              data={orders}
+              renderItem={renderOrderItem}
+              keyExtractor={item => item.id.toString()}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No orders found</Text>
+              }
+            />
+          </View>
+          
+          {/* Users Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('registeredUsers')}</Text>
@@ -286,137 +625,174 @@ ${users
             />
           </View>
           
-          {/* Stats Cards */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.statsContainer}
-          >
-            <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
-              <FontAwesome5 name="users" size={24} color="#fff" />
-              <Text style={styles.statNumber}>{stats.totalUsers}</Text>
-              <Text style={styles.statLabel}>{t('totalAccounts')}</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
-              <FontAwesome5 name="hand-holding-heart" size={24} color="#fff" />
-              <Text style={styles.statNumber}>{stats.totalDonations}</Text>
-              <Text style={styles.statLabel}>{t('totalDonations')}</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
-              <FontAwesome5 name="star" size={24} color="#fff" />
-              <Text style={styles.statNumber}>{stats.totalPoints}</Text>
-              <Text style={styles.statLabel}>{t('totalPoints')}</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
-              <FontAwesome5 name="user-check" size={24} color="#fff" />
-              <Text style={styles.statNumber}>{stats.activeUsers}</Text>
-              <Text style={styles.statLabel}>{t('activeUsers')}</Text>
-            </View>
-          </ScrollView>
-          
-          {/* Recent Donations */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('recentDonations')}</Text>
-              <Text style={styles.sectionCount}>({donations.length})</Text>
-            </View>
-            <FlatList
-              data={donations.slice(0, 5)}
-              renderItem={renderDonationItem}
-              keyExtractor={item => item.id.toString()}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
-          
           {/* Bottom spacing */}
           <View style={{ height: 20 }} />
         </ScrollView>
         
-        {/* User Details Modal */}
-        <Modal visible={showUserModal} animationType="slide" transparent>
+        {/* Order Details Modal */}
+        <Modal visible={showOrderModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t('userDetails')}</Text>
-                <TouchableOpacity onPress={() => setShowUserModal(false)}>
+                <Text style={styles.modalTitle}>
+                  {selectedOrder?.type === 'donation' ? 'Donation' : 'Request'} Details
+                </Text>
+                <TouchableOpacity onPress={() => setShowOrderModal(false)}>
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
-              {selectedUser && (
+              
+              {selectedOrder && (
                 <ScrollView style={styles.modalScroll}>
-                  <View style={styles.userDetailCard}>
-                    <View style={styles.userDetailHeader}>
-                      <View style={styles.userDetailAvatar}>
-                        <FontAwesome5 name="user" size={40} color="#2196F3" />
-                      </View>
-                      <View style={styles.userDetailInfo}>
-                        <Text style={styles.userDetailName}>{selectedUser.name}</Text>
-                        <Text style={styles.userDetailEmail}>{selectedUser.email}</Text>
-                        <Text style={styles.userDetailType}>{selectedUser.type}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.userDetailStats}>
-                      <View style={styles.userDetailStat}>
-                        <Text style={styles.userDetailStatNumber}>
-                          {selectedUser.points || 0}
+                  {/* Order Information */}
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>Order Information</Text>
+                    <Text style={styles.orderDetailText}>
+                      Order ID: #{selectedOrder.id}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Type: {selectedOrder.type === 'donation' ? 'Donation' : 'Request'}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Status: {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Date: {selectedOrder.date}
+                    </Text>
+                  </View>
+                  
+                  {/* User Information */}
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>User Information</Text>
+                    <Text style={styles.orderDetailText}>
+                      Name: {selectedOrder.userName}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Email: {selectedOrder.userEmail}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Phone: {selectedOrder.userPhone}
+                    </Text>
+                  </View>
+                  
+                  {/* Order Details */}
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>
+                      {selectedOrder.type === 'donation' ? 'Donation' : 'Request'} Details
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      People: {selectedOrder.people}
+                    </Text>
+                    {selectedOrder.type === 'donation' && (
+                      <>
+                        <Text style={styles.orderDetailText}>
+                          Food Type: {selectedOrder.foodType}
                         </Text>
-                        <Text style={styles.userDetailStatLabel}>{t('points')}</Text>
-                      </View>
-                      <View style={styles.userDetailStat}>
-                        <Text style={styles.userDetailStatNumber}>
-                          {selectedUser.donationHistory ? selectedUser.donationHistory.length : 0}
+                        <Text style={styles.orderDetailText}>
+                          Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
                         </Text>
-                        <Text style={styles.userDetailStatLabel}>{t('donations')}</Text>
-                      </View>
+                        <Text style={styles.orderDetailText}>
+                          Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
+                        </Text>
+                      </>
+                    )}
+                    {selectedOrder.type === 'request' && (
+                      <Text style={styles.orderDetailText}>
+                        Reason: {selectedOrder.reason}
+                      </Text>
+                    )}
+                    <Text style={styles.orderDetailText}>
+                      Location: {selectedOrder.location}
+                    </Text>
+                  </View>
+                  
+                  {/* Image */}
+                  {selectedOrder.imageUri && (
+                    <View style={styles.orderDetailSection}>
+                      <Text style={styles.orderDetailSectionTitle}>Food Image</Text>
+                      <Image 
+                        source={{ uri: selectedOrder.imageUri }} 
+                        style={styles.orderDetailImage} 
+                      />
                     </View>
-                    <View style={styles.userDetailSection}>
-                      <Text style={styles.userDetailSectionTitle}>{t('contactInformation')}</Text>
-                      <Text style={styles.userDetailText}>{t('phone')}: {selectedUser.phone}</Text>
-                      {selectedUser.address && (
-                        <Text style={styles.userDetailText}>{t('address')}: {selectedUser.address}</Text>
-                      )}
+                  )}
+                  
+                  {/* Driver Assignment (for pending orders) */}
+                  {selectedOrder.status === 'pending' && (
+                    <View style={styles.orderDetailSection}>
+                      <Text style={styles.orderDetailSectionTitle}>Assign Driver</Text>
+                      <TextInput
+                        style={styles.driverInput}
+                        placeholder="Driver Name"
+                        value={driverName}
+                        onChangeText={setDriverName}
+                      />
+                      <TextInput
+                        style={styles.driverInput}
+                        placeholder="Driver Phone"
+                        value={driverPhone}
+                        onChangeText={setDriverPhone}
+                        keyboardType="phone-pad"
+                      />
+                      <TextInput
+                        style={styles.driverInput}
+                        placeholder={
+                          selectedOrder.type === 'donation' 
+                            ? 'Estimated Pickup Time' 
+                            : 'Estimated Delivery Time'
+                        }
+                        value={estimatedTime}
+                        onChangeText={setEstimatedTime}
+                      />
                     </View>
-                    <View style={styles.userDetailSection}>
-                      <Text style={styles.userDetailSectionTitle}>{t('accountInformation')}</Text>
-                      <Text style={styles.userDetailText}>{t('memberSince')}: {new Date(selectedUser.createdAt).toLocaleDateString()}</Text>
-                      {selectedUser.lastUpdated && (
-                        <Text style={styles.userDetailText}>{t('lastUpdated')}: {new Date(selectedUser.lastUpdated).toLocaleDateString()}</Text>
-                      )}
+                  )}
+                  
+                  {/* Driver Information (for approved orders) */}
+                  {(selectedOrder.status === 'approved' || selectedOrder.status === 'completed') && (
+                    <View style={styles.orderDetailSection}>
+                      <Text style={styles.orderDetailSectionTitle}>Driver Information</Text>
+                      <Text style={styles.orderDetailText}>
+                        Name: {selectedOrder.driverName || 'Not assigned'}
+                      </Text>
+                      <Text style={styles.orderDetailText}>
+                        Phone: {selectedOrder.driverPhone || 'Not assigned'}
+                      </Text>
+                      <Text style={styles.orderDetailText}>
+                        {selectedOrder.type === 'donation' 
+                          ? `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled'}`
+                          : `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled'}`
+                        }
+                      </Text>
                     </View>
-                    <View style={styles.userDetailSection}>
-                      <Text style={styles.userDetailSectionTitle}>{t('donationHistory')}</Text>
-                      {userDonations.length > 0 ? (
-                        userDonations.map((donation, index) => (
-                          <View key={index} style={styles.userDonationCard}>
-                            <View style={styles.userDonationHeader}>
-                              <Text style={styles.userDonationTitle}>
-                                {t('donation')} #{donation.id}
-                              </Text>
-                              <Text style={styles.userDonationDate}>{donation.date}</Text>
-                            </View>
-                            <View style={styles.userDonationDetails}>
-                              <Text style={styles.userDonationDetail}>
-                                {t('peopleServed')}: {donation.people}
-                              </Text>
-                              <Text style={styles.userDonationDetail}>
-                                {t('foodType')}: {donation.foodType}
-                              </Text>
-                              <Text style={styles.userDonationDetail}>
-                                {t('weight')}: {donation.weight}
-                              </Text>
-                              <Text style={styles.userDonationDetail}>
-                                {t('location')}: {donation.location}
-                              </Text>
-                              <Text style={styles.userDonationDetail}>
-                                {t('status')}: {donation.status}
-                              </Text>
-                            </View>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.noDataText}>{t('noDonationsYet')}</Text>
-                      )}
-                    </View>
+                  )}
+                  
+                  {/* Action Buttons */}
+                  <View style={styles.modalActions}>
+                    {selectedOrder.status === 'pending' && (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.approveButton]}
+                          onPress={approveOrder}
+                        >
+                          <Text style={styles.modalButtonText}>Approve Order</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.rejectButton]}
+                          onPress={rejectOrder}
+                        >
+                          <Text style={styles.modalButtonText}>Reject Order</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    
+                    {selectedOrder.status === 'approved' && (
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.completeButton]}
+                        onPress={completeOrder}
+                      >
+                        <Text style={styles.modalButtonText}>Mark as Completed</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </ScrollView>
               )}
@@ -445,20 +821,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 40,
   },
-  backButton: {
-    padding: 5,
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
   headerTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-  },
-  headerActions: {
-    flexDirection: 'row',
+    textAlign: 'center',
+    flex: 1,
   },
   headerButton: {
-    marginLeft: 15,
     padding: 5,
+  },
+  logoutButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -482,6 +871,143 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  
+  // Stats Cards
+  statsContainer: {
+    padding: 15,
+    marginBottom: 15,
+  },
+  statCard: {
+    width: 150,
+    height: 100,
+    borderRadius: 10,
+    padding: 15,
+    marginRight: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 5,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#fff',
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  
+  // Order Cards
+  orderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  orderTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  orderType: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginRight: 5,
+  },
+  orderId: {
+    fontSize: 14,
+    color: '#666',
+  },
+  orderStatusContainer: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+  },
+  orderStatus: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  orderDetails: {
+    marginTop: 10,
+  },
+  orderDetail: {
+    flexDirection: 'row',
+    marginBottom: 5,
+  },
+  orderLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+    width: 100,
+  },
+  orderValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  orderImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 10,
+    marginVertical: 10,
+  },
+  orderActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  viewButton: {
+    backgroundColor: '#2196F3',
+  },
+  approveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  rejectButton: {
+    backgroundColor: '#F44336',
+  },
+  completeButton: {
+    backgroundColor: '#2196F3',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    marginLeft: 5,
+  },
+  
+  // User Cards
   userCard: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -532,106 +1058,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FF9800',
   },
-  userDonations: {
+  userOrders: {
     fontSize: 14,
     color: '#4CAF50',
   },
-  userActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-    marginLeft: 10,
-  },
-  viewButton: {
-    backgroundColor: '#2196F3',
-  },
-  deleteButton: {
-    backgroundColor: '#F44336',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    marginLeft: 5,
-  },
-  statsContainer: {
-    padding: 15,
-    marginBottom: 15,
-  },
-  statCard: {
-    width: 150,
-    height: 100,
-    borderRadius: 10,
-    padding: 15,
-    marginRight: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 5,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#fff',
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  donationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  donationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  donationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  donationDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  donationDetails: {
-    marginTop: 10,
-  },
-  donationDetail: {
-    flexDirection: 'row',
-    marginBottom: 5,
-  },
-  donationLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#666',
-    width: 100,
-  },
-  donationValue: {
-    fontSize: 12,
-    color: '#333',
-    flex: 1,
-  },
+  
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -659,112 +1091,57 @@ const styles = StyleSheet.create({
   modalScroll: {
     padding: 20,
   },
-  userDetailCard: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 20,
-  },
-  userDetailHeader: {
-    flexDirection: 'row',
+  orderDetailSection: {
     marginBottom: 20,
   },
-  userDetailAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  userDetailInfo: {
-    flex: 1,
-  },
-  userDetailName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  userDetailEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  userDetailType: {
-    fontSize: 12,
-    color: '#2196F3',
-    marginTop: 2,
-  },
-  userDetailStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-    paddingVertical: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-  },
-  userDetailStat: {
-    alignItems: 'center',
-  },
-  userDetailStatNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  userDetailStatLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  userDetailSection: {
-    marginBottom: 20,
-  },
-  userDetailSectionTitle: {
+  orderDetailSectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 10,
   },
-  userDetailText: {
+  orderDetailText: {
     fontSize: 14,
     color: '#666',
     marginBottom: 5,
   },
-  userDonationCard: {
-    backgroundColor: '#fff',
+  orderDetailImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  driverInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
+    marginBottom: 10, 
+    fontSize: 14,
   },
-  userDonationHeader: {
+  modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginTop: 20,
   },
-  userDonationTitle: {
-    fontSize: 14,
+  modalButton: {
+    flex: 0.45, // Reduced from 0.48 to add more space between buttons
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  approveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  rejectButton: {
+    backgroundColor: '#F44336',
+  },
+  completeButton: {
+    backgroundColor: '#2196F3',
+  },
+  modalButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
-    color: '#333',
-  },
-  userDonationDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  userDonationDetails: {
-    marginTop: 5,
-  },
-  userDonationDetail: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 3,
-  },
-  noDataText: {
     fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    paddingVertical: 20,
   },
 });
