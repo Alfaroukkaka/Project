@@ -1,4 +1,3 @@
-// WelcomeScreen.js
 import React, { useState, useContext } from 'react';
 import {
   View,
@@ -13,13 +12,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { LanguageContext } from '../App'; // Import the context
+import { LanguageContext } from '../App';
 
-const backgroundUri =
-  'https://image.shutterstock.com/image-photo/assortment-vibrant-gourmet-dishes-showcasing-600nw-2473449039.jpg';
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
 
 export default function WelcomeScreen({ navigation }) {
-  const { language, setLanguage, t, isRTL } = useContext(LanguageContext); // Use the context
+  const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
   const [isGuestView, setIsGuestView] = useState(false);
   const [aiInput, setAiInput] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -30,11 +28,11 @@ export default function WelcomeScreen({ navigation }) {
     name: t('guest'),
     type: t('guest'),
   };
-
+  
   const handleProtectedAction = () => {
     setShowLoginModal(true);
   };
-
+  
   const handleAskAI = () => {
     if (!aiInput.trim()) {
       alert(t('pleaseEnterQuestion'));
@@ -44,7 +42,7 @@ export default function WelcomeScreen({ navigation }) {
       `🍽️ ${t('aiSuggestionPrefix')} ${aiInput}, ${t('aiSuggestionSuffix')}`
     );
   };
-
+  
   // Guest flow
   if (isGuestView) {
     return (
@@ -268,6 +266,7 @@ export default function WelcomeScreen({ navigation }) {
       </KeyboardAvoidingView>
     );
   }
+  
   // Default welcome box
   return (
     <KeyboardAvoidingView 
@@ -314,7 +313,7 @@ export default function WelcomeScreen({ navigation }) {
 
 const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
-  background: { flex: 1, justifyContent: 'center' },
+  background: { flex: 1, justifyContent: 'center', resizeMode: 'cover' },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -454,5 +453,3 @@ const styles = StyleSheet.create({
   modalButton: { backgroundColor: '#2196F3', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 8 },
   modalButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
-
-
