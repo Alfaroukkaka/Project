@@ -1,4 +1,3 @@
-// AdminScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -12,10 +11,13 @@ import {
   FlatList,
   RefreshControl,
   Share,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
 
 export default function AdminScreen({ navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
@@ -245,186 +247,192 @@ ${users
   );
   
   return (
-    <View style={[styles.container, { backgroundColor: darkMode ? '#121212' : '#f5f5f5' }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={shareReport} style={styles.headerButton}>
-            <Ionicons name="share" size={24} color="#fff" />
+    <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
+      <View style={[styles.container, { backgroundColor: darkMode ? 'rgba(18,18,18,0.85)' : 'rgba(245,245,245,0.85)' }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout} style={styles.headerButton}>
-            <Ionicons name="log-out" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-      
-      {/* Content */}
-      <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Users Section - Now at the top */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('registeredUsers')}</Text>
-            <Text style={styles.sectionCount}>({stats.totalUsers})</Text>
+          <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={shareReport} style={styles.headerButton}>
+              <Ionicons name="share" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} style={styles.headerButton}>
+              <Ionicons name="log-out" size={24} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <FlatList
-            data={users}
-            renderItem={renderUserItem}
-            keyExtractor={item => item.email}
-            showsVerticalScrollIndicator={false}
-          />
         </View>
         
-        {/* Stats Cards */}
+        {/* Content */}
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsContainer}
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
-          <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
-            <FontAwesome5 name="users" size={24} color="#fff" />
-            <Text style={styles.statNumber}>{stats.totalUsers}</Text>
-            <Text style={styles.statLabel}>{t('totalAccounts')}</Text>
+          {/* Users Section - Now at the top */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('registeredUsers')}</Text>
+              <Text style={styles.sectionCount}>({stats.totalUsers})</Text>
+            </View>
+            <FlatList
+              data={users}
+              renderItem={renderUserItem}
+              keyExtractor={item => item.email}
+              showsVerticalScrollIndicator={false}
+            />
           </View>
-          <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
-            <FontAwesome5 name="hand-holding-heart" size={24} color="#fff" />
-            <Text style={styles.statNumber}>{stats.totalDonations}</Text>
-            <Text style={styles.statLabel}>{t('totalDonations')}</Text>
+          
+          {/* Stats Cards */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.statsContainer}
+          >
+            <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
+              <FontAwesome5 name="users" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalUsers}</Text>
+              <Text style={styles.statLabel}>{t('totalAccounts')}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
+              <FontAwesome5 name="hand-holding-heart" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalDonations}</Text>
+              <Text style={styles.statLabel}>{t('totalDonations')}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
+              <FontAwesome5 name="star" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalPoints}</Text>
+              <Text style={styles.statLabel}>{t('totalPoints')}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
+              <FontAwesome5 name="user-check" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.activeUsers}</Text>
+              <Text style={styles.statLabel}>{t('activeUsers')}</Text>
+            </View>
+          </ScrollView>
+          
+          {/* Recent Donations */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('recentDonations')}</Text>
+              <Text style={styles.sectionCount}>({donations.length})</Text>
+            </View>
+            <FlatList
+              data={donations.slice(0, 5)}
+              renderItem={renderDonationItem}
+              keyExtractor={item => item.id.toString()}
+              showsVerticalScrollIndicator={false}
+            />
           </View>
-          <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
-            <FontAwesome5 name="star" size={24} color="#fff" />
-            <Text style={styles.statNumber}>{stats.totalPoints}</Text>
-            <Text style={styles.statLabel}>{t('totalPoints')}</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
-            <FontAwesome5 name="user-check" size={24} color="#fff" />
-            <Text style={styles.statNumber}>{stats.activeUsers}</Text>
-            <Text style={styles.statLabel}>{t('activeUsers')}</Text>
-          </View>
+          
+          {/* Bottom spacing */}
+          <View style={{ height: 20 }} />
         </ScrollView>
         
-        {/* Recent Donations */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('recentDonations')}</Text>
-            <Text style={styles.sectionCount}>({donations.length})</Text>
-          </View>
-          <FlatList
-            data={donations.slice(0, 5)}
-            renderItem={renderDonationItem}
-            keyExtractor={item => item.id.toString()}
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
-        
-        {/* Bottom spacing */}
-        <View style={{ height: 20 }} />
-      </ScrollView>
-      
-      {/* User Details Modal */}
-      <Modal visible={showUserModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('userDetails')}</Text>
-              <TouchableOpacity onPress={() => setShowUserModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
+        {/* User Details Modal */}
+        <Modal visible={showUserModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('userDetails')}</Text>
+                <TouchableOpacity onPress={() => setShowUserModal(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              {selectedUser && (
+                <ScrollView style={styles.modalScroll}>
+                  <View style={styles.userDetailCard}>
+                    <View style={styles.userDetailHeader}>
+                      <View style={styles.userDetailAvatar}>
+                        <FontAwesome5 name="user" size={40} color="#2196F3" />
+                      </View>
+                      <View style={styles.userDetailInfo}>
+                        <Text style={styles.userDetailName}>{selectedUser.name}</Text>
+                        <Text style={styles.userDetailEmail}>{selectedUser.email}</Text>
+                        <Text style={styles.userDetailType}>{selectedUser.type}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.userDetailStats}>
+                      <View style={styles.userDetailStat}>
+                        <Text style={styles.userDetailStatNumber}>
+                          {selectedUser.points || 0}
+                        </Text>
+                        <Text style={styles.userDetailStatLabel}>{t('points')}</Text>
+                      </View>
+                      <View style={styles.userDetailStat}>
+                        <Text style={styles.userDetailStatNumber}>
+                          {selectedUser.donationHistory ? selectedUser.donationHistory.length : 0}
+                        </Text>
+                        <Text style={styles.userDetailStatLabel}>{t('donations')}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.userDetailSection}>
+                      <Text style={styles.userDetailSectionTitle}>{t('contactInformation')}</Text>
+                      <Text style={styles.userDetailText}>{t('phone')}: {selectedUser.phone}</Text>
+                      {selectedUser.address && (
+                        <Text style={styles.userDetailText}>{t('address')}: {selectedUser.address}</Text>
+                      )}
+                    </View>
+                    <View style={styles.userDetailSection}>
+                      <Text style={styles.userDetailSectionTitle}>{t('accountInformation')}</Text>
+                      <Text style={styles.userDetailText}>{t('memberSince')}: {new Date(selectedUser.createdAt).toLocaleDateString()}</Text>
+                      {selectedUser.lastUpdated && (
+                        <Text style={styles.userDetailText}>{t('lastUpdated')}: {new Date(selectedUser.lastUpdated).toLocaleDateString()}</Text>
+                      )}
+                    </View>
+                    <View style={styles.userDetailSection}>
+                      <Text style={styles.userDetailSectionTitle}>{t('donationHistory')}</Text>
+                      {userDonations.length > 0 ? (
+                        userDonations.map((donation, index) => (
+                          <View key={index} style={styles.userDonationCard}>
+                            <View style={styles.userDonationHeader}>
+                              <Text style={styles.userDonationTitle}>
+                                {t('donation')} #{donation.id}
+                              </Text>
+                              <Text style={styles.userDonationDate}>{donation.date}</Text>
+                            </View>
+                            <View style={styles.userDonationDetails}>
+                              <Text style={styles.userDonationDetail}>
+                                {t('peopleServed')}: {donation.people}
+                              </Text>
+                              <Text style={styles.userDonationDetail}>
+                                {t('foodType')}: {donation.foodType}
+                              </Text>
+                              <Text style={styles.userDonationDetail}>
+                                {t('weight')}: {donation.weight}
+                              </Text>
+                              <Text style={styles.userDonationDetail}>
+                                {t('location')}: {donation.location}
+                              </Text>
+                              <Text style={styles.userDonationDetail}>
+                                {t('status')}: {donation.status}
+                              </Text>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.noDataText}>{t('noDonationsYet')}</Text>
+                      )}
+                    </View>
+                  </View>
+                </ScrollView>
+              )}
             </View>
-            {selectedUser && (
-              <ScrollView style={styles.modalScroll}>
-                <View style={styles.userDetailCard}>
-                  <View style={styles.userDetailHeader}>
-                    <View style={styles.userDetailAvatar}>
-                      <FontAwesome5 name="user" size={40} color="#2196F3" />
-                    </View>
-                    <View style={styles.userDetailInfo}>
-                      <Text style={styles.userDetailName}>{selectedUser.name}</Text>
-                      <Text style={styles.userDetailEmail}>{selectedUser.email}</Text>
-                      <Text style={styles.userDetailType}>{selectedUser.type}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.userDetailStats}>
-                    <View style={styles.userDetailStat}>
-                      <Text style={styles.userDetailStatNumber}>
-                        {selectedUser.points || 0}
-                      </Text>
-                      <Text style={styles.userDetailStatLabel}>{t('points')}</Text>
-                    </View>
-                    <View style={styles.userDetailStat}>
-                      <Text style={styles.userDetailStatNumber}>
-                        {selectedUser.donationHistory ? selectedUser.donationHistory.length : 0}
-                      </Text>
-                      <Text style={styles.userDetailStatLabel}>{t('donations')}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.userDetailSection}>
-                    <Text style={styles.userDetailSectionTitle}>{t('contactInformation')}</Text>
-                    <Text style={styles.userDetailText}>{t('phone')}: {selectedUser.phone}</Text>
-                    {selectedUser.address && (
-                      <Text style={styles.userDetailText}>{t('address')}: {selectedUser.address}</Text>
-                    )}
-                  </View>
-                  <View style={styles.userDetailSection}>
-                    <Text style={styles.userDetailSectionTitle}>{t('accountInformation')}</Text>
-                    <Text style={styles.userDetailText}>{t('memberSince')}: {new Date(selectedUser.createdAt).toLocaleDateString()}</Text>
-                    {selectedUser.lastUpdated && (
-                      <Text style={styles.userDetailText}>{t('lastUpdated')}: {new Date(selectedUser.lastUpdated).toLocaleDateString()}</Text>
-                    )}
-                  </View>
-                  <View style={styles.userDetailSection}>
-                    <Text style={styles.userDetailSectionTitle}>{t('donationHistory')}</Text>
-                    {userDonations.length > 0 ? (
-                      userDonations.map((donation, index) => (
-                        <View key={index} style={styles.userDonationCard}>
-                          <View style={styles.userDonationHeader}>
-                            <Text style={styles.userDonationTitle}>
-                              {t('donation')} #{donation.id}
-                            </Text>
-                            <Text style={styles.userDonationDate}>{donation.date}</Text>
-                          </View>
-                          <View style={styles.userDonationDetails}>
-                            <Text style={styles.userDonationDetail}>
-                              {t('peopleServed')}: {donation.people}
-                            </Text>
-                            <Text style={styles.userDonationDetail}>
-                              {t('foodType')}: {donation.foodType}
-                            </Text>
-                            <Text style={styles.userDonationDetail}>
-                              {t('weight')}: {donation.weight}
-                            </Text>
-                            <Text style={styles.userDonationDetail}>
-                              {t('location')}: {donation.location}
-                            </Text>
-                            <Text style={styles.userDonationDetail}>
-                              {t('status')}: {donation.status}
-                            </Text>
-                          </View>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noDataText}>{t('noDonationsYet')}</Text>
-                    )}
-                  </View>
-                </View>
-              </ScrollView>
-            )}
           </View>
-        </View>
-      </Modal>
-    </View>
+        </Modal>
+      </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+  },
   container: {
     flex: 1,
   },
