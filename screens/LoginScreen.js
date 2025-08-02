@@ -1,4 +1,3 @@
-// LoginScreen.js
 import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
@@ -13,9 +12,12 @@ import {
   Platform,
   Keyboard,
   Dimensions,
+  ImageBackground,
 } from 'react-native';
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
 
 export default function LoginScreen({ navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
@@ -114,86 +116,92 @@ export default function LoginScreen({ navigation }) {
   };
   
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -200}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
-          contentContainerStyle={[
-            styles.scroll, 
-            { paddingBottom: keyboardHeight + 20 }
-          ]}
-        >
-          {/* Logo/Icon Section */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>🍽️</Text>
-            </View>
-            <Text style={styles.appName}>Tawfeer</Text>
-            <Text style={styles.tagline}>{t('loginSubtitle')}</Text>
-          </View>
-          
-          {/* Login Form */}
-          <View style={styles.formContainer}>
-            <Text style={styles.title}>{t('login')}</Text>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>{t('emailOrPhone')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('enterEmailOrPhone')}
-                value={emailOrPhone}
-                onChangeText={setEmailOrPhone}
-                keyboardType="default"
-                autoCapitalize="none"
-                placeholderTextColor="#888"
-              />
+    <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -200}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <ScrollView 
+            contentContainerStyle={[
+              styles.scroll, 
+              { paddingBottom: keyboardHeight + 20 }
+            ]}
+          >
+            {/* Logo/Icon Section */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Text style={styles.logoText}>🍽️</Text>
+              </View>
+              <Text style={styles.appName}>Tawfeer</Text>
+              <Text style={styles.tagline}>{t('loginSubtitle')}</Text>
             </View>
             
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>{t('password')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('enterPassword')}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                placeholderTextColor="#888"
-              />
-            </View>
-            
-            <TouchableOpacity style={styles.forgotPasswordButton}>
-              <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>{t('login')}</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>{t('dontHaveAccount')}</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>{t('register')}</Text>
+            {/* Login Form */}
+            <View style={styles.formContainer}>
+              <Text style={styles.title}>{t('login')}</Text>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>{t('emailOrPhone')}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('enterEmailOrPhone')}
+                  value={emailOrPhone}
+                  onChangeText={setEmailOrPhone}
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  placeholderTextColor="#888"
+                />
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>{t('password')}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('enterPassword')}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  placeholderTextColor="#888"
+                />
+              </View>
+              
+              <TouchableOpacity style={styles.forgotPasswordButton}>
+                <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
               </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                <Text style={styles.loginButtonText}>{t('login')}</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.registerContainer}>
+                <Text style={styles.registerText}>{t('dontHaveAccount')}</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                  <Text style={styles.registerLink}>{t('register')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>{t('madeWithLove')}</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+            
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>{t('madeWithLove')}</Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248,249,250,0.85)',
   },
   safeArea: {
     flex: 1,
