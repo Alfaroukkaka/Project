@@ -1,4 +1,3 @@
-// FoodInteractionScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -155,12 +154,12 @@ export default function FoodInteractionScreen() {
   
   // Apply dark mode styles with RTL support
   const dynamicStyles = {
-    background: { flex: 1 },
+    background: { flex: 1, resizeMode: 'cover' },
     container: { 
       paddingTop: 60,       // Increased top padding from 20 to 60
       paddingHorizontal: 20, 
       paddingBottom: 20, 
-      backgroundColor: darkMode ? '#121212' : 'rgba(255,255,255,0.9)',
+      backgroundColor: darkMode ? 'rgba(18,18,18,0.9)' : 'rgba(255,255,255,0.9)',
       direction: isRTL ? 'rtl' : 'ltr',
     },
     topRow: {
