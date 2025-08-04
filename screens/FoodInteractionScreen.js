@@ -67,6 +67,12 @@ export default function FoodInteractionScreen() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
   
+  // New states for cooked/uncooked food
+  const [isCooked, setIsCooked] = useState(null);
+  const [uncookedType, setUncookedType] = useState('');
+  const [uncookedQuantity, setUncookedQuantity] = useState('');
+  const [uncookedUnit, setUncookedUnit] = useState('items');
+  
   const [editedUserData, setEditedUserData] = useState({
     name: userData.name || '',
     email: userData.email || '',
@@ -1241,6 +1247,43 @@ export default function FoodInteractionScreen() {
       marginTop: 10,
       textAlign: isRTL ? 'left' : 'right',
     },
+    
+    // Uncooked Food Styles
+    uncookedTypeButton: {
+      backgroundColor: darkMode ? '#333' : '#eee',
+      padding: 12,
+      borderRadius: 8,
+      marginVertical: 5,
+      alignItems: 'center',
+    },
+    uncookedTypeSelected: {
+      backgroundColor: darkMode ? '#2E7D32' : '#a5d6a7',
+    },
+    uncookedTypeText: {
+      fontSize: fontSize,
+      color: darkMode ? '#fff' : '#333',
+    },
+    unitSelector: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 5,
+      marginBottom: 10,
+    },
+    unitButton: {
+      flex: 1,
+      padding: 8,
+      backgroundColor: darkMode ? '#333' : '#eee',
+      marginHorizontal: 2,
+      borderRadius: 6,
+      alignItems: 'center',
+    },
+    unitSelected: {
+      backgroundColor: darkMode ? '#2E7D32' : '#a5d6a7',
+    },
+    unitText: {
+      fontSize: fontSize - 2,
+      color: darkMode ? '#fff' : '#333',
+    },
   };
   
   const handleImagePick = async () => {
@@ -1259,19 +1302,33 @@ export default function FoodInteractionScreen() {
   };
   
   const handleSubmitDonation = () => {
-    if (!people || isNew === null || isConsumable === null || !location || !phone || !imageUri) {
-      Alert.alert(t('missingInfo'), t('pleaseFillAll'));
+    // Validate based on cooked or uncooked
+    if (isCooked === null) {
+      Alert.alert(t('missingInfo'), 'Please specify if the food is cooked or not');
       return;
+    }
+    
+    if (isCooked) {
+      // Cooked food validation
+      if (!people || isNew === null || isConsumable === null || !location || !phone || !imageUri) {
+        Alert.alert(t('missingInfo'), t('pleaseFillAll'));
+        return;
+      }
+    } else {
+      // Uncooked food validation
+      if (!uncookedType || !uncookedQuantity || !people || !location || !phone || !imageUri) {
+        Alert.alert(t('missingInfo'), t('pleaseFillAll'));
+        return;
+      }
     }
     
     Alert.alert(t('donationSuccess'), t('donationSuccessMsg'));
     
+    // Create order item with different properties based on cooked/uncooked
     const orderItem = {
       id: Date.now(),
       type: 'donation',
       people,
-      isNew,
-      isConsumable,
       location,
       phone,
       date: new Date().toLocaleString(),
@@ -1280,12 +1337,26 @@ export default function FoodInteractionScreen() {
       estimatedPickup: '',
       driverName: '',
       driverPhone: '',
-      foodType: isNew ? 'Prepared Food' : 'Leftovers',
-      weight: Math.floor(Math.random() * 10) + 1 + ' kg',
       imageUri: imageUri,
       userName: userData.name,
       userEmail: userData.email,
+      isCooked: isCooked,
     };
+    
+    if (isCooked) {
+      // Cooked food properties
+      orderItem.isNew = isNew;
+      orderItem.isConsumable = isConsumable;
+      orderItem.foodType = isNew ? 'Prepared Food' : 'Leftovers';
+      orderItem.weight = Math.floor(Math.random() * 10) + 1 + ' kg';
+    } else {
+      // Uncooked food properties
+      orderItem.uncookedType = uncookedType;
+      orderItem.uncookedQuantity = uncookedQuantity;
+      orderItem.uncookedUnit = uncookedUnit;
+      orderItem.foodType = `${uncookedQuantity} ${uncookedUnit} of ${uncookedType}`;
+      orderItem.weight = uncookedQuantity + ' ' + uncookedUnit;
+    }
     
     // Add to active orders
     setActiveOrders(prevOrders => [orderItem, ...prevOrders]);
@@ -1305,6 +1376,10 @@ export default function FoodInteractionScreen() {
     setLocation('');
     setPhone('');
     setImageUri(null);
+    setIsCooked(null);
+    setUncookedType('');
+    setUncookedQuantity('');
+    setUncookedUnit('items');
   };
   
   const handleSubmitRequest = () => {
@@ -1748,7 +1823,10 @@ export default function FoodInteractionScreen() {
                 </Text>
               </View>
             ) : (
-              <TouchableOpacity onPress={() => setMode(null)} style={dynamicStyles.backButton}>
+              <TouchableOpacity onPress={() => {
+                setMode(null);
+                setIsCooked(null);
+              }} style={dynamicStyles.backButton}>
                 <Ionicons name="arrow-back" size={24} color="#2196F3" />
               </TouchableOpacity>
             )}
@@ -1805,45 +1883,165 @@ export default function FoodInteractionScreen() {
           
           {mode === 'donate' && (
             <View>
-              <Text style={dynamicStyles.question}>{t('howManyPeople')}</Text>
-              <TextInput 
-                style={dynamicStyles.input} 
-                placeholder={t('e.g. 4')} 
-                value={people} 
-                onChangeText={setPeople} 
-                keyboardType="numeric" 
-                placeholderTextColor={darkMode ? '#888' : '#999'}
-              />
-              <Text style={dynamicStyles.question}>{t('isFoodNew')}</Text>
+              {/* Cooked/Uncooked Selection */}
+              <Text style={dynamicStyles.question}>Is the food cooked or uncooked?</Text>
               <View style={dynamicStyles.switchRow}>
                 <TouchableOpacity 
-                  style={[dynamicStyles.switchButton, isNew === true && dynamicStyles.selected]} 
-                  onPress={() => setIsNew(true)}
+                  style={[dynamicStyles.switchButton, isCooked === true && dynamicStyles.selected]} 
+                  onPress={() => setIsCooked(true)}
                 >
-                  <Text>{t('yes')}</Text>
+                  <Text>Cooked Food</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[dynamicStyles.switchButton, isNew === false && dynamicStyles.selected]} 
-                  onPress={() => setIsNew(false)}
+                  style={[dynamicStyles.switchButton, isCooked === false && dynamicStyles.selected]} 
+                  onPress={() => setIsCooked(false)}
                 >
-                  <Text>{t('no')}</Text>
+                  <Text>Uncooked Food</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={dynamicStyles.question}>{t('isFoodConsumable')}</Text>
-              <View style={dynamicStyles.switchRow}>
-                <TouchableOpacity 
-                  style={[dynamicStyles.switchButton, isConsumable === true && dynamicStyles.selected]} 
-                  onPress={() => setIsConsumable(true)}
-                >
-                  <Text>{t('yes')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[dynamicStyles.switchButton, isConsumable === false && dynamicStyles.selected]} 
-                  onPress={() => setIsConsumable(false)}
-                >
-                  <Text>{t('no')}</Text>
-                </TouchableOpacity>
-              </View>
+              
+              {/* Conditional rendering based on cooked/uncooked selection */}
+              {isCooked === true && (
+                <>
+                  <Text style={dynamicStyles.question}>{t('howManyPeople')}</Text>
+                  <TextInput 
+                    style={dynamicStyles.input} 
+                    placeholder={t('e.g. 4')} 
+                    value={people} 
+                    onChangeText={setPeople} 
+                    keyboardType="numeric" 
+                    placeholderTextColor={darkMode ? '#888' : '#999'}
+                  />
+                  <Text style={dynamicStyles.question}>{t('isFoodNew')}</Text>
+                  <View style={dynamicStyles.switchRow}>
+                    <TouchableOpacity 
+                      style={[dynamicStyles.switchButton, isNew === true && dynamicStyles.selected]} 
+                      onPress={() => setIsNew(true)}
+                    >
+                      <Text>{t('yes')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[dynamicStyles.switchButton, isNew === false && dynamicStyles.selected]} 
+                      onPress={() => setIsNew(false)}
+                    >
+                      <Text>{t('no')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={dynamicStyles.question}>{t('isFoodConsumable')}</Text>
+                  <View style={dynamicStyles.switchRow}>
+                    <TouchableOpacity 
+                      style={[dynamicStyles.switchButton, isConsumable === true && dynamicStyles.selected]} 
+                      onPress={() => setIsConsumable(true)}
+                    >
+                      <Text>{t('yes')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[dynamicStyles.switchButton, isConsumable === false && dynamicStyles.selected]} 
+                      onPress={() => setIsConsumable(false)}
+                    >
+                      <Text>{t('no')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+              
+              {isCooked === false && (
+                <>
+                  <Text style={dynamicStyles.question}>What type of uncooked food are you donating?</Text>
+                  <TouchableOpacity 
+                    style={[
+                      dynamicStyles.uncookedTypeButton, 
+                      uncookedType === 'Canned Goods' && dynamicStyles.uncookedTypeSelected
+                    ]} 
+                    onPress={() => setUncookedType('Canned Goods')}
+                  >
+                    <Text style={dynamicStyles.uncookedTypeText}>Canned Goods</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      dynamicStyles.uncookedTypeButton, 
+                      uncookedType === 'Rice' && dynamicStyles.uncookedTypeSelected
+                    ]} 
+                    onPress={() => setUncookedType('Rice')}
+                  >
+                    <Text style={dynamicStyles.uncookedTypeText}>Rice</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      dynamicStyles.uncookedTypeButton, 
+                      uncookedType === 'Flour' && dynamicStyles.uncookedTypeSelected
+                    ]} 
+                    onPress={() => setUncookedType('Flour')}
+                  >
+                    <Text style={dynamicStyles.uncookedTypeText}>Flour</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      dynamicStyles.uncookedTypeButton, 
+                      uncookedType === 'Other' && dynamicStyles.uncookedTypeSelected
+                    ]} 
+                    onPress={() => setUncookedType('Other')}
+                  >
+                    <Text style={dynamicStyles.uncookedTypeText}>Other</Text>
+                  </TouchableOpacity>
+                  
+                  {uncookedType !== '' && (
+                    <>
+                      <Text style={dynamicStyles.question}>Quantity</Text>
+                      <View style={dynamicStyles.switchRow}>
+                        <TextInput 
+                          style={[dynamicStyles.input, {flex: 2}]} 
+                          placeholder="Quantity" 
+                          value={uncookedQuantity} 
+                          onChangeText={setUncookedQuantity} 
+                          keyboardType="numeric" 
+                          placeholderTextColor={darkMode ? '#888' : '#999'}
+                        />
+                        <View style={[dynamicStyles.unitSelector, {flex: 3}]}>
+                          <TouchableOpacity 
+                            style={[
+                              dynamicStyles.unitButton, 
+                              uncookedUnit === 'items' && dynamicStyles.unitSelected
+                            ]} 
+                            onPress={() => setUncookedUnit('items')}
+                          >
+                            <Text style={dynamicStyles.unitText}>Items</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              dynamicStyles.unitButton, 
+                              uncookedUnit === 'kg' && dynamicStyles.unitSelected
+                            ]} 
+                            onPress={() => setUncookedUnit('kg')}
+                          >
+                            <Text style={dynamicStyles.unitText}>Kg</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              dynamicStyles.unitButton, 
+                              uncookedUnit === 'liters' && dynamicStyles.unitSelected
+                            ]} 
+                            onPress={() => setUncookedUnit('liters')}
+                          >
+                            <Text style={dynamicStyles.unitText}>Liters</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                  
+                  <Text style={dynamicStyles.question}>{t('howManyPeople')}</Text>
+                  <TextInput 
+                    style={dynamicStyles.input} 
+                    placeholder={t('e.g. 4')} 
+                    value={people} 
+                    onChangeText={setPeople} 
+                    keyboardType="numeric" 
+                    placeholderTextColor={darkMode ? '#888' : '#999'}
+                  />
+                </>
+              )}
+              
               <Text style={dynamicStyles.question}>{t('uploadPhoto')}</Text>
               <View style={dynamicStyles.switchRow}>
                 <TouchableOpacity style={dynamicStyles.photoButton} onPress={handleImagePick}>
@@ -1963,12 +2161,11 @@ export default function FoodInteractionScreen() {
                 <Text style={dynamicStyles.guideSubTitle}>🍽️ Donating Food:</Text>
                 <Text style={dynamicStyles.guideText}>
                   1. Click "Donate Food" on the main screen{'\n'}
-                  2. Fill in how many people the food can serve{'\n'}
-                  3. Specify if the food is new or leftover{'\n'}
-                  4. Confirm the food is safe for human consumption{'\n'}
-                  5. Take or upload a photo of the food{'\n'}
-                  6. Enter your location and phone number{'\n'}
-                  7. Submit - earn 20 points and help the community!
+                  2. Specify if the food is cooked or uncooked{'\n'}
+                  3. Fill in the required details based on food type{'\n'}
+                  4. Take or upload a photo of the food{'\n'}
+                  5. Enter your location and phone number{'\n'}
+                  6. Submit - earn 20 points and help the community!
                 </Text>
                 
                 <Text style={dynamicStyles.guideSubTitle}>🙏 Requesting Food:</Text>
@@ -2458,12 +2655,26 @@ export default function FoodInteractionScreen() {
                           <Text style={dynamicStyles.orderDetailsText}>
                             Food Type: {selectedOrder.foodType}
                           </Text>
-                          <Text style={dynamicStyles.orderDetailsText}>
-                            Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
-                          </Text>
-                          <Text style={dynamicStyles.orderDetailsText}>
-                            Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
-                          </Text>
+                          {selectedOrder.isCooked && (
+                            <>
+                              <Text style={dynamicStyles.orderDetailsText}>
+                                Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
+                              </Text>
+                              <Text style={dynamicStyles.orderDetailsText}>
+                                Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
+                              </Text>
+                            </>
+                          )}
+                          {!selectedOrder.isCooked && (
+                            <>
+                              <Text style={dynamicStyles.orderDetailsText}>
+                                Uncooked Type: {selectedOrder.uncookedType}
+                              </Text>
+                              <Text style={dynamicStyles.orderDetailsText}>
+                                Quantity: {selectedOrder.uncookedQuantity} {selectedOrder.uncookedUnit}
+                              </Text>
+                            </>
+                          )}
                         </>
                       )}
                       {selectedOrder.type === 'request' && (
@@ -2603,12 +2814,11 @@ export default function FoodInteractionScreen() {
                   <Text style={dynamicStyles.subTitle}>🍽️ {t('donatingFood')}:</Text>
                   <Text style={dynamicStyles.infoText}>
                     1. {t('clickDonateFood')}{'\n'}
-                    2. {t('fillPeopleServed')}{'\n'}
-                    3. {t('specifyFoodType')}{'\n'}
-                    4. {t('confirmSafe')}{'\n'}
-                    5. {t('uploadPhoto')}{'\n'}
-                    6. {t('enterLocationPhone')}{'\n'}
-                    7. {t('submitEarnPoints')}
+                    2. {t('specifyCookedUncooked')}{'\n'}
+                    3. {t('fillDetails')}{'\n'}
+                    4. {t('uploadPhoto')}{'\n'}
+                    5. {t('enterLocationPhone')}{'\n'}
+                    6. {t('submitEarnPoints')}
                   </Text>
                   
                   <Text style={dynamicStyles.subTitle}>🙏 {t('requestingFood')}:</Text>
