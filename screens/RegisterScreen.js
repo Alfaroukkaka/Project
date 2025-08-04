@@ -96,7 +96,7 @@ export default function RegisterScreen({ navigation }) {
 
   try {
     // 🔗 Add backend fetch call to send verification PIN
-    const response = await fetch('http://192.168.1.100:3000/send-pin', {
+    const response = await fetch('https://project-3oaa.onrender.com', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),

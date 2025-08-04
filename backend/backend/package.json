@@ -1,8 +1,9 @@
 {
-  "name": "pin-verification-api",
+  "name": "pin-verification-backend",
   "version": "1.0.0",
-  "description": "Email PIN verification service",
+  "description": "Email PIN verification API",
   "main": "server.js",
+  "type": "module" ,
   "scripts": {
     "start": "node server.js"
   },
@@ -12,6 +13,6 @@
     "nodemailer": "^6.9.7"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   }
 }
