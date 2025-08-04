@@ -1,6 +1,7 @@
 {
   "license": "0BSD",
   "main": "index.js",
+
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",

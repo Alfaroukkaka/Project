@@ -72,51 +72,58 @@ export default function RegisterScreen({ navigation }) {
   };
   
   const handleRegister = async () => {
-    const finalType = userType === t('other') ? otherType : userType;
-    if (!finalType || !name || !email || !phone || !password) {
-      Alert.alert(t('missingInfo'), t('completeAllFields'));
-      return;
+  const finalType = userType === t('other') ? otherType : userType;
+
+  if (!finalType || !name || !email || !phone || !password) {
+    Alert.alert(t('missingInfo'), t('completeAllFields'));
+    return;
+  }
+
+  const userData = {
+    name,
+    email,
+    phone,
+    password, // Ideally hash this before sending to real backend
+    type: finalType,
+    createdAt: new Date().toISOString(),
+    points: 0,
+    donationHistory: [],
+  };
+
+  // Save to AsyncStorage first
+  const saved = await saveCredentials(userData);
+  if (!saved) return;
+
+  try {
+    // 🔗 Add backend fetch call to send verification PIN
+    const response = await fetch('http://192.168.1.100:3000/send-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Failed to send PIN');
     }
-    
-    const userData = {
-      name,
-      email,
-      phone,
-      password, // In a real app, you should hash the password
-      type: finalType,
-      createdAt: new Date().toISOString(),
-      points: 0,
-      donationHistory: [],
-    };
-    
-    // Save credentials to AsyncStorage
-    const saved = await saveCredentials(userData);
-    
-    if (!saved) {
-      return;
-    }
-    
-    // Show success modal
+
     setShowSuccessModal(true);
-    
-    // Auto-login after 2 seconds
+
+    // Navigate to verification screen after 2s
     setTimeout(() => {
       setShowSuccessModal(false);
-      
-      // Navigate to FoodInteraction with user data
-      navigation.navigate('FoodInteraction', {
-        userData: {
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone,
-          type: userData.type,
-        },
-        isGuest: false,
-        points: 0,
-        donationHistory: [],
+      navigation.navigate('Verification', {
+        userData,
+        pin: result.pin, // if you want to pass it (dev only — don't do this in prod)
       });
     }, 2000);
-  };
+  } catch (error) {
+    console.error('Verification fetch error:', error);
+    Alert.alert('Error', 'Could not send verification email. Please try again.');
+  }
+};
+
   
   return (
     <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
