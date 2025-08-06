@@ -2,7 +2,6 @@ import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   TextInput,
   Image,
@@ -24,8 +23,9 @@ import axios from 'axios';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { triggerDashboardUpdate } from '../utils/StorageEvents';
 
-const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c07730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T18%3A06%3A40Z&ske%3D2025-07-29T18%3A06%3A40Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
 
 export default function FoodInteractionScreen() {
   const navigation = useNavigation();
@@ -72,6 +72,15 @@ export default function FoodInteractionScreen() {
   const [uncookedType, setUncookedType] = useState('');
   const [uncookedQuantity, setUncookedQuantity] = useState('');
   const [uncookedUnit, setUncookedUnit] = useState('items');
+  
+  // New states for description and AI suggestion
+  const [description, setDescription] = useState('');
+  const [showAISuggestionModal, setShowAISuggestionModal] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState('');
+  
+  // New states for location and map
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
   
   const [editedUserData, setEditedUserData] = useState({
     name: userData.name || '',
@@ -246,6 +255,42 @@ export default function FoodInteractionScreen() {
       await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
     } catch (error) {
       console.error('Error saving user data:', error);
+    }
+  };
+  
+  // Save donation data to dashboard
+  const saveDonationToDashboard = async (donation) => {
+    try {
+      // Get existing dashboard data
+      const dashboardDataJson = await AsyncStorage.getItem('dashboardData');
+      const dashboardData = dashboardDataJson ? JSON.parse(dashboardDataJson) : {
+        donations: [],
+        users: []
+      };
+      
+      // Add new donation with timestamp
+      dashboardData.donations.push({
+        id: donation.id,
+        date: donation.date,
+        type: 'donation',
+        userName: donation.userName,
+        userEmail: donation.userEmail,
+        foodType: donation.foodType,
+        weight: donation.weight,
+        people: donation.people,
+        status: donation.status,
+        timestamp: Date.now()
+      });
+      
+      // Save updated dashboard data
+      await AsyncStorage.setItem('dashboardData', JSON.stringify(dashboardData));
+      
+      // Trigger dashboard update
+      triggerDashboardUpdate();
+      
+      console.log('Donation saved to dashboard');
+    } catch (error) {
+      console.error('Error saving donation to dashboard:', error);
     }
   };
   
@@ -479,6 +524,33 @@ export default function FoodInteractionScreen() {
       color: darkMode ? '#ccc' : '#555',
       fontSize: fontSize,
       textAlign: isRTL ? 'right' : 'left',
+    },
+    
+    // Description container
+    descriptionContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 10,
+    },
+    aiSuggestionButton: {
+      padding: 8,
+      marginLeft: 10,
+      marginTop: 10,
+      backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
+      borderRadius: 8,
+    },
+    
+    // Location container
+    locationContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    mapButton: {
+      padding: 8,
+      marginLeft: 10,
+      backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
+      borderRadius: 8,
     },
     
     // Process Tracker Styles
@@ -840,6 +912,139 @@ export default function FoodInteractionScreen() {
       fontWeight: 'bold',
       color: darkMode ? '#fff' : '#333',
       textAlign: isRTL ? 'right' : 'left',
+    },
+    
+    // AI Suggestion Modal
+    aiSuggestionModal: {
+      backgroundColor: darkMode ? '#1E1E1E' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      paddingBottom: 30,
+      maxHeight: '50%',
+    },
+    aiSuggestionModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: darkMode ? '#333' : '#eee',
+    },
+    aiSuggestionModalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    aiSuggestionModalContent: {
+      marginBottom: 20,
+    },
+    aiSuggestionText: {
+      fontSize: 16,
+      color: darkMode ? '#fff' : '#333',
+      marginBottom: 20,
+      lineHeight: 24,
+    },
+    useSuggestionButton: {
+      backgroundColor: '#2196F3',
+      padding: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    useSuggestionButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
+    },
+    
+    // Map Modal
+    mapModal: {
+      backgroundColor: darkMode ? '#1E1E1E' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      maxHeight: '90%',
+    },
+    mapModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: darkMode ? '#333' : '#eee',
+    },
+    mapModalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#fff' : '#333',
+    },
+    mapContainer: {
+      height: 300,
+      borderRadius: 10,
+      overflow: 'hidden',
+      marginBottom: 20,
+    },
+    mapPlaceholder: {
+      flex: 1,
+      backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    mapPlaceholderText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: darkMode ? '#999' : '#666',
+      marginTop: 10,
+    },
+    mapPlaceholderSubtext: {
+      fontSize: 14,
+      color: darkMode ? '#888' : '#999',
+      textAlign: 'center',
+      marginTop: 5,
+      paddingHorizontal: 20,
+    },
+    mapButtonsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 20,
+    },
+    mapButtonOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
+      padding: 12,
+      borderRadius: 10,
+      width: '48%',
+    },
+    mapButtonText: {
+      fontSize: 14,
+      color: darkMode ? '#fff' : '#333',
+      marginLeft: 8,
+    },
+    mapInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    mapInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: darkMode ? '#444' : '#ddd',
+      borderRadius: 8,
+      padding: 12,
+      backgroundColor: darkMode ? '#1E1E1E' : '#fff',
+      color: darkMode ? '#fff' : '#333',
+      fontSize: fontSize,
+    },
+    mapConfirmButton: {
+      backgroundColor: '#2196F3',
+      padding: 12,
+      borderRadius: 8,
+      marginLeft: 10,
+    },
+    mapConfirmButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
     },
     
     // Profile Section
@@ -1332,8 +1537,8 @@ export default function FoodInteractionScreen() {
       location,
       phone,
       date: new Date().toLocaleString(),
-      status: 'pending', // pending, approved, completed, rejected
-      acknowledged: false, // New flag to track if user has acknowledged completion
+      status: 'pending',
+      acknowledged: false,
       estimatedPickup: '',
       driverName: '',
       driverPhone: '',
@@ -1341,6 +1546,7 @@ export default function FoodInteractionScreen() {
       userName: userData.name,
       userEmail: userData.email,
       isCooked: isCooked,
+      description: description, // Add description
     };
     
     if (isCooked) {
@@ -1368,6 +1574,12 @@ export default function FoodInteractionScreen() {
     };
     setDonationHistory(prevHistory => [historyItem, ...prevHistory]);
     
+    // Save donation to dashboard for government charts
+    saveDonationToDashboard({
+      ...orderItem,
+      timestamp: Date.now()
+    });
+    
     // Reset form
     setMode(null);
     setPeople('');
@@ -1380,6 +1592,7 @@ export default function FoodInteractionScreen() {
     setUncookedType('');
     setUncookedQuantity('');
     setUncookedUnit('items');
+    setDescription(''); // Reset description
   };
   
   const handleSubmitRequest = () => {
@@ -1398,13 +1611,14 @@ export default function FoodInteractionScreen() {
       location,
       phone,
       date: new Date().toLocaleString(),
-      status: 'pending', // pending, approved, completed, rejected
-      acknowledged: false, // New flag to track if user has acknowledged completion
+      status: 'pending',
+      acknowledged: false,
       estimatedDelivery: '',
       driverName: '',
       driverPhone: '',
       userName: userData.name,
       userEmail: userData.email,
+      description: description, // Add description
     };
     
     // Add to active orders
@@ -1416,6 +1630,7 @@ export default function FoodInteractionScreen() {
     setRequestPeople('');
     setLocation('');
     setPhone('');
+    setDescription(''); // Reset description
   };
   
   const handleAIRequest = async () => {
@@ -1451,6 +1666,41 @@ export default function FoodInteractionScreen() {
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Generate AI suggestion for description
+  const generateAISuggestion = () => {
+    let suggestion = '';
+    
+    if (mode === 'donate') {
+      if (isCooked) {
+        suggestion = `Freshly cooked ${isNew ? 'meal' : 'leftovers'} suitable for ${people || '4'} people. 
+        ${isConsumable ? 'Safe for human consumption.' : 'Not suitable for human consumption.'}
+        Please handle with care and consume within 24 hours.`;
+      } else {
+        suggestion = `${uncookedQuantity || '5'} ${uncookedUnit} of ${uncookedType || 'rice'} available for donation. 
+        Uncooked and sealed in original packaging. Suitable for ${people || '4'} people.`;
+      }
+    } else {
+      suggestion = `In need of food assistance for ${requestPeople || 'my family'}. 
+      ${requestReason || 'Facing financial difficulties.'} 
+      Any non-perishable items would be greatly appreciated.`;
+    }
+    
+    setAiSuggestion(suggestion);
+    setShowAISuggestionModal(true);
+  };
+  
+  // Open Google Maps for location selection
+  const openGoogleMaps = () => {
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapSearchQuery || 'food bank near me')}`;
+    Linking.openURL(url);
+  };
+  
+  // Use current location
+  const useCurrentLocation = () => {
+    setLocation('Current Location (GPS)');
+    setShowMapModal(false);
   };
   
   // Logout function that clears only session data but preserves user data
@@ -2042,6 +2292,25 @@ export default function FoodInteractionScreen() {
                 </>
               )}
               
+              {/* Description field with AI suggestion */}
+              <Text style={dynamicStyles.question}>Description</Text>
+              <View style={dynamicStyles.descriptionContainer}>
+                <TextInput
+                  style={[dynamicStyles.input, { flex: 1 }]}
+                  placeholder="Add a description for your donation"
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholderTextColor={darkMode ? '#888' : '#999'}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={dynamicStyles.aiSuggestionButton}
+                  onPress={generateAISuggestion}
+                >
+                  <Ionicons name="bulb-outline" size={24} color="#2196F3" />
+                </TouchableOpacity>
+              </View>
+              
               <Text style={dynamicStyles.question}>{t('uploadPhoto')}</Text>
               <View style={dynamicStyles.switchRow}>
                 <TouchableOpacity style={dynamicStyles.photoButton} onPress={handleImagePick}>
@@ -2052,14 +2321,25 @@ export default function FoodInteractionScreen() {
                 </TouchableOpacity>
               </View>
               {imageUri && <Image source={{ uri: imageUri }} style={dynamicStyles.preview} />}
+              
+              {/* Location field with map integration */}
               <Text style={dynamicStyles.question}>{t('location')}</Text>
-              <TextInput 
-                style={dynamicStyles.input} 
-                placeholder={t('enterLocation')} 
-                value={location} 
-                onChangeText={setLocation} 
-                placeholderTextColor={darkMode ? '#888' : '#999'}
-              />
+              <View style={dynamicStyles.locationContainer}>
+                <TextInput
+                  style={[dynamicStyles.input, { flex: 1 }]}
+                  placeholder={t('enterLocation')}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholderTextColor={darkMode ? '#888' : '#999'}
+                />
+                <TouchableOpacity
+                  style={dynamicStyles.mapButton}
+                  onPress={() => setShowMapModal(true)}
+                >
+                  <Ionicons name="map-outline" size={24} color="#2196F3" />
+                </TouchableOpacity>
+              </View>
+              
               <Text style={dynamicStyles.question}>{t('phoneNumber')}</Text>
               <TextInput 
                 style={dynamicStyles.input} 
@@ -2095,14 +2375,44 @@ export default function FoodInteractionScreen() {
                 keyboardType="numeric"
                 placeholderTextColor={darkMode ? '#888' : '#999'}
               />
+              
+              {/* Description field with AI suggestion */}
+              <Text style={dynamicStyles.question}>Description</Text>
+              <View style={dynamicStyles.descriptionContainer}>
+                <TextInput
+                  style={[dynamicStyles.input, { flex: 1 }]}
+                  placeholder="Add a description for your request"
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholderTextColor={darkMode ? '#888' : '#999'}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={dynamicStyles.aiSuggestionButton}
+                  onPress={generateAISuggestion}
+                >
+                  <Ionicons name="bulb-outline" size={24} color="#2196F3" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Location field with map integration */}
               <Text style={dynamicStyles.question}>{t('location')}</Text>
-              <TextInput 
-                style={dynamicStyles.input} 
-                placeholder={t('enterLocation')} 
-                value={location} 
-                onChangeText={setLocation}
-                placeholderTextColor={darkMode ? '#888' : '#999'}
-              />
+              <View style={dynamicStyles.locationContainer}>
+                <TextInput
+                  style={[dynamicStyles.input, { flex: 1 }]}
+                  placeholder={t('enterLocation')}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholderTextColor={darkMode ? '#888' : '#999'}
+                />
+                <TouchableOpacity
+                  style={dynamicStyles.mapButton}
+                  onPress={() => setShowMapModal(true)}
+                >
+                  <Ionicons name="map-outline" size={24} color="#2196F3" />
+                </TouchableOpacity>
+              </View>
+              
               <Text style={dynamicStyles.question}>{t('phoneNumber')}</Text>
               <TextInput 
                 style={dynamicStyles.input} 
@@ -2163,9 +2473,10 @@ export default function FoodInteractionScreen() {
                   1. Click "Donate Food" on the main screen{'\n'}
                   2. Specify if the food is cooked or uncooked{'\n'}
                   3. Fill in the required details based on food type{'\n'}
-                  4. Take or upload a photo of the food{'\n'}
-                  5. Enter your location and phone number{'\n'}
-                  6. Submit - earn 20 points and help the community!
+                  4. Add a description for your donation{'\n'}
+                  5. Take or upload a photo of the food{'\n'}
+                  6. Enter your location and phone number{'\n'}
+                  7. Submit - earn 20 points and help the community!
                 </Text>
                 
                 <Text style={dynamicStyles.guideSubTitle}>🙏 Requesting Food:</Text>
@@ -2173,8 +2484,9 @@ export default function FoodInteractionScreen() {
                   1. Click "Request Food" on the main screen{'\n'}
                   2. Explain why you need food assistance{'\n'}
                   3. Specify how many people will be served{'\n'}
-                  4. Enter your location and contact information{'\n'}
-                  5. Submit your request - we'll contact you soon!
+                  4. Add a description for your request{'\n'}
+                  5. Enter your location and contact information{'\n'}
+                  6. Submit your request - we'll contact you soon!
                 </Text>
                 
                 <Text style={dynamicStyles.guideSubTitle}>🤖 AI Recipe Assistant:</Text>
@@ -2212,11 +2524,11 @@ export default function FoodInteractionScreen() {
                 
                 <Text style={dynamicStyles.guideSectionTitle}>👥 User Types</Text>
                 <Text style={dynamicStyles.guideText}>
-                  • <Text style={dynamicStyles.guideBoldText}>Household:</Text> Families and individuals{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>Restaurant:</Text> Food service businesses{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>Supermarket:</Text> Grocery stores and markets{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>Organization:</Text> NGOs, companies, institutions{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>Guest:</Text> Temporary access with limited features
+                  • <Text style={dynamicStyles.guideBoldText}>{t('household')}:</Text> {t('familiesIndividuals')}{'\n'}
+                  • <Text style={dynamicStyles.guideBoldText}>{t('restaurant')}:</Text> {t('foodBusinesses')}{'\n'}
+                  • <Text style={dynamicStyles.guideBoldText}>{t('supermarket')}:</Text> {t('groceryStores')}{'\n'}
+                  • <Text style={dynamicStyles.guideBoldText}>{t('organization')}:</Text> {t('ngosCompanies')}{'\n'}
+                  • <Text style={dynamicStyles.guideBoldText}>{t('guest')}:</Text> {t('temporaryAccess')}
                 </Text>
                 
                 {/* Bottom spacing for better scrolling */}
@@ -2685,9 +2997,15 @@ export default function FoodInteractionScreen() {
                       <Text style={dynamicStyles.orderDetailsText}>
                         Location: {selectedOrder.location}
                       </Text>
-                      <Text style={dynamicStyles.orderDetailsText}>
-                        Phone: {selectedOrder.phone}
-                      </Text>
+                      
+                      {/* Description */}
+                      {selectedOrder.description && (
+                        <>
+                          <Text style={dynamicStyles.orderDetailsText}>
+                            Description: {selectedOrder.description}
+                          </Text>
+                        </>
+                      )}
                     </View>
                     
                     {/* Image */}
@@ -2706,15 +3024,15 @@ export default function FoodInteractionScreen() {
                       <View style={dynamicStyles.orderDetailsSection}>
                         <Text style={dynamicStyles.orderDetailsSectionTitle}>Driver Information</Text>
                         <Text style={dynamicStyles.orderDetailsText}>
-                          Name: {selectedOrder.driverName || 'Not assigned yet'}
+                          Name: {selectedOrder.driverName || 'Not assigned'}
                         </Text>
                         <Text style={dynamicStyles.orderDetailsText}>
-                          Phone: {selectedOrder.driverPhone || 'Not assigned yet'}
+                          Phone: {selectedOrder.driverPhone || 'Not assigned'}
                         </Text>
                         <Text style={dynamicStyles.orderDetailsText}>
-                          {selectedOrder.type === 'donation' ? 
-                            `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled yet'}` :
-                            `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled yet'}`
+                          {selectedOrder.type === 'donation' 
+                            ? `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled'}`
+                            : `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled'}`
                           }
                         </Text>
                       </View>
@@ -2727,6 +3045,96 @@ export default function FoodInteractionScreen() {
           
           {/* Message Details Modal */}
           {renderMessageDetailsModal()}
+          
+          {/* AI Suggestion Modal */}
+          <Modal visible={showAISuggestionModal} animationType="slide" transparent>
+            <View style={dynamicStyles.modalOverlay}>
+              <View style={dynamicStyles.aiSuggestionModal}>
+                <View style={dynamicStyles.aiSuggestionModalHeader}>
+                  <Text style={dynamicStyles.aiSuggestionModalTitle}>AI Suggestion</Text>
+                  <TouchableOpacity onPress={() => setShowAISuggestionModal(false)}>
+                    <Ionicons name="close" size={24} color={darkMode ? "#fff" : "#333"} />
+                  </TouchableOpacity>
+                </View>
+                <View style={dynamicStyles.aiSuggestionModalContent}>
+                  <Text style={dynamicStyles.aiSuggestionText}>{aiSuggestion}</Text>
+                  <TouchableOpacity
+                    style={dynamicStyles.useSuggestionButton}
+                    onPress={() => {
+                      setDescription(aiSuggestion);
+                      setShowAISuggestionModal(false);
+                    }}
+                  >
+                    <Text style={dynamicStyles.useSuggestionButtonText}>Use This Suggestion</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          
+          {/* Map Modal */}
+          <Modal visible={showMapModal} animationType="slide" transparent>
+            <View style={dynamicStyles.modalOverlay}>
+              <View style={dynamicStyles.mapModal}>
+                <View style={dynamicStyles.mapModalHeader}>
+                  <Text style={dynamicStyles.mapModalTitle}>Select Location</Text>
+                  <TouchableOpacity onPress={() => setShowMapModal(false)}>
+                    <Ionicons name="close" size={24} color={darkMode ? "#fff" : "#333"} />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={dynamicStyles.mapContainer}>
+                  {/* This would be replaced with an actual map component in a real app */}
+                  <View style={dynamicStyles.mapPlaceholder}>
+                    <Ionicons name="map" size={60} color="#ccc" />
+                    <Text style={dynamicStyles.mapPlaceholderText}>Map Integration</Text>
+                    <Text style={dynamicStyles.mapPlaceholderSubtext}>
+                      In a real implementation, this would show an interactive map
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={dynamicStyles.mapButtonsContainer}>
+                  <TouchableOpacity
+                    style={dynamicStyles.mapButtonOption}
+                    onPress={useCurrentLocation}
+                  >
+                    <Ionicons name="location-outline" size={20} color="#2196F3" />
+                    <Text style={dynamicStyles.mapButtonText}>Use Current Location</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={dynamicStyles.mapButtonOption}
+                    onPress={openGoogleMaps}
+                  >
+                    <Ionicons name="open-outline" size={20} color="#2196F3" />
+                    <Text style={dynamicStyles.mapButtonText}>Open Google Maps</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={dynamicStyles.mapInputContainer}>
+                  <TextInput
+                    style={dynamicStyles.mapInput}
+                    placeholder="Search for a location..."
+                    value={mapSearchQuery}
+                    onChangeText={setMapSearchQuery}
+                    placeholderTextColor={darkMode ? '#888' : '#999'}
+                  />
+                  <TouchableOpacity
+                    style={dynamicStyles.mapConfirmButton}
+                    onPress={() => {
+                      if (mapSearchQuery) {
+                        setLocation(mapSearchQuery);
+                      }
+                      setShowMapModal(false);
+                    }}
+                  >
+                    <Text style={dynamicStyles.mapConfirmButtonText}>Confirm</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
           
           {/* Approval Notification Modal */}
           <Modal visible={showApprovalNotification} animationType="slide" transparent>
