@@ -1,3 +1,4 @@
+// screens/LoginScreen.js
 import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
@@ -13,6 +14,7 @@ import {
   Keyboard,
   Dimensions,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,6 +26,7 @@ export default function LoginScreen({ navigation }) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [loading, setLoading] = useState(false);
   
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -68,50 +71,69 @@ export default function LoginScreen({ navigation }) {
       return;
     }
     
-    // Check for admin credentials
-    if (emailOrPhone === 'admin123' && password === '123') {
-      // Navigate to Admin screen and reset the navigation stack
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Admin' }],
-      });
-      return;
-    }
+    setLoading(true);
     
-    // Check for hardcoded credentials (for quick access)
-    if (emailOrPhone === '123' && password === '123') {
-      Alert.alert(t('loginSuccessful'), t('welcomeToTawfeer'));
-      navigation.navigate('FoodInteraction', {
-        userData: {
-          name: t('guestUser'),
-          email: 'guest@example.com',
-          phone: '123',
-          type: t('guest'),
-        },
-        isGuest: false,
-      });
-      return;
-    }
-    
-    // Get user account
-    const userAccount = await getUserAccount(emailOrPhone, password);
-    
-    if (userAccount) {
-      Alert.alert(t('loginSuccess'), t('dataLoaded'));
-      navigation.navigate('FoodInteraction', {
-        userData: {
-          name: userAccount.name,
-          email: userAccount.email,
-          phone: userAccount.phone,
-          type: userAccount.type,
-        },
-        isGuest: false,
-        // Pass points and donation history
-        points: userAccount.points || 0,
-        donationHistory: userAccount.donationHistory || [],
-      });
-    } else {
-      Alert.alert(t('loginFailed'), t('invalidCredentials'));
+    try {
+      // Check for admin credentials
+      if (emailOrPhone === 'admin123' && password === '123') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Admin' }],
+        });
+        return;
+      }
+      
+      // Check for government credentials
+      if (emailOrPhone === 'gov123' && password === '123') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'GovernmentDashboard' }],
+        });
+        return;
+      }
+      
+      // Check for hardcoded credentials (for quick access)
+      if (emailOrPhone === '123' && password === '123') {
+        Alert.alert(t('loginSuccessful'), t('welcomeToTawfeer'));
+        navigation.navigate('FoodInteraction', {
+          userData: {
+            name: t('guestUser'),
+            email: 'guest@example.com',
+            phone: '123',
+            type: t('guest'),
+          },
+          isGuest: false,
+        });
+        return;
+      }
+      
+      // Get user account
+      const userAccount = await getUserAccount(emailOrPhone, password);
+      
+      if (userAccount) {
+        Alert.alert(t('loginSuccess'), t('dataLoaded'));
+        navigation.navigate('FoodInteraction', {
+          userData: {
+            name: userAccount.name,
+            email: userAccount.email,
+            phone: userAccount.phone,
+            type: userAccount.type,
+          },
+          isGuest: false,
+          // Pass points and donation history
+          points: userAccount.points || 0,
+          donationHistory: userAccount.donationHistory || [],
+          activeOrders: userAccount.activeOrders || [],
+          messages: userAccount.messages || [],
+        });
+      } else {
+        Alert.alert(t('loginFailed'), t('invalidCredentials'));
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'An error occurred during login. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -152,6 +174,7 @@ export default function LoginScreen({ navigation }) {
                   keyboardType="default"
                   autoCapitalize="none"
                   placeholderTextColor="#888"
+                  editable={!loading}
                 />
               </View>
               
@@ -164,6 +187,7 @@ export default function LoginScreen({ navigation }) {
                   onChangeText={setPassword}
                   secureTextEntry
                   placeholderTextColor="#888"
+                  editable={!loading}
                 />
               </View>
               
@@ -171,8 +195,16 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                <Text style={styles.loginButtonText}>{t('login')}</Text>
+              <TouchableOpacity 
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.loginButtonText}>{t('login')}</Text>
+                )}
               </TouchableOpacity>
               
               <View style={styles.registerContainer}>
@@ -194,6 +226,7 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -299,6 +332,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 3,
+  },
+  loginButtonDisabled: {
+    backgroundColor: '#90CAF9',
   },
   loginButtonText: {
     color: '#fff',
