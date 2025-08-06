@@ -64,6 +64,10 @@ export default function RegisterScreen({ navigation }) {
       
       // Save updated users array
       await AsyncStorage.setItem('users', JSON.stringify(users));
+      
+      // Update dashboard data with new user registration
+      await updateDashboardWithUser(userData);
+      
       return true;
     } catch (error) {
       console.error('Error saving credentials:', error);
@@ -71,59 +75,75 @@ export default function RegisterScreen({ navigation }) {
     }
   };
   
-  const handleRegister = async () => {
-  const finalType = userType === t('other') ? otherType : userType;
-
-  if (!finalType || !name || !email || !phone || !password) {
-    Alert.alert(t('missingInfo'), t('completeAllFields'));
-    return;
-  }
-
-  const userData = {
-    name,
-    email,
-    phone,
-    password, // Ideally hash this before sending to real backend
-    type: finalType,
-    createdAt: new Date().toISOString(),
-    points: 0,
-    donationHistory: [],
-  };
-
-  // Save to AsyncStorage first
-  const saved = await saveCredentials(userData);
-  if (!saved) return;
-
-  try {
-    // 🔗 Add backend fetch call to send verification PIN
-    const response = await fetch('https://project-3oaa.onrender.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Failed to send PIN');
+  const updateDashboardWithUser = async (userData) => {
+    try {
+      const dashboardDataJson = await AsyncStorage.getItem('dashboardData');
+      const dashboardData = dashboardDataJson ? JSON.parse(dashboardDataJson) : {
+        donations: [],
+        users: []
+      };
+      
+      // Add new user registration to dashboard
+      dashboardData.users.push({
+        date: new Date().toISOString(),
+        type: 'user',
+        user: userData.name,
+        userEmail: userData.email,
+        userType: userData.type,
+      });
+      
+      await AsyncStorage.setItem('dashboardData', JSON.stringify(dashboardData));
+    } catch (error) {
+      console.error('Error updating dashboard with user:', error);
     }
-
+  };
+  
+  const handleRegister = async () => {
+    const finalType = userType === t('other') ? otherType : userType;
+    if (!finalType || !name || !email || !phone || !password) {
+      Alert.alert(t('missingInfo'), t('completeAllFields'));
+      return;
+    }
+    
+    const userData = {
+      name,
+      email,
+      phone,
+      password, // In a real app, you should hash the password
+      type: finalType,
+      createdAt: new Date().toISOString(),
+      points: 0,
+      donationHistory: [],
+    };
+    
+    // Save credentials to AsyncStorage
+    const saved = await saveCredentials(userData);
+    
+    if (!saved) {
+      return;
+    }
+    
+    // Show success modal
     setShowSuccessModal(true);
-
-    // Navigate to verification screen after 2s
+    
+    // Auto-login after 2 seconds
     setTimeout(() => {
       setShowSuccessModal(false);
-      navigation.navigate('Verification', {
-        userData,
-        pin: result.pin, // if you want to pass it (dev only — don't do this in prod)
+      
+      // Navigate to FoodInteraction with user data
+      navigation.navigate('FoodInteraction', {
+        userData: {
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          type: userData.type,
+        },
+        isGuest: false,
+        points: 0,
+        donationHistory: [],
       });
     }, 2000);
-  } catch (error) {
-    console.error('Verification fetch error:', error);
-    Alert.alert('Error', 'Could not send verification email. Please try again.');
-  }
-};
-
+  };
   
   return (
     <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
@@ -271,13 +291,14 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Background and layout
   background: {
     flex: 1,
     resizeMode: 'cover',
   },
   container: {
     flex: 1,
-    backgroundColor: 'rgba(248,249,250,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
   },
   scroll: {
     flexGrow: 1,
@@ -285,6 +306,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
     paddingBottom: 30,
   },
+  
+  // Logo and branding
   logoContainer: {
     alignItems: 'center',
     marginBottom: 40,
@@ -293,13 +316,13 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#2e8b57',
+    backgroundColor: '#2E7D32',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
   },
@@ -307,24 +330,26 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   appName: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2e8b57',
+    color: '#2E7D32',
     marginBottom: 5,
   },
   tagline: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
   },
+  
+  // Form container
   formContainer: {
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 20,
     padding: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowRadius: 15,
     elevation: 5,
   },
   title: {
@@ -334,45 +359,49 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
+  
+  // Input fields
   inputContainer: {
     marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#555',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    padding: 15,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F9F9F9',
     color: '#333',
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    backgroundColor: '#f8f9fa',
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    backgroundColor: '#F9F9F9',
   },
   picker: {
     height: 50,
     width: '100%',
   },
+  
+  // Buttons
   registerButton: {
-    backgroundColor: '#2e8b57',
+    backgroundColor: '#2E7D32',
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#2e8b57',
+    shadowColor: '#2E7D32',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
-    elevation: 3,
+    elevation: 5,
   },
   registerButtonText: {
     color: '#fff',
@@ -385,23 +414,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
   },
   loginLink: {
-    fontSize: 14,
-    color: '#2196F3',
+    fontSize: 16,
+    color: '#1976D2',
     fontWeight: 'bold',
     marginLeft: 5,
   },
+  
+  // Footer
   footer: {
     marginTop: 30,
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 14,
+    color: '#888',
   },
+  
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -411,14 +443,14 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 20,
     padding: 30,
     alignItems: 'center',
     width: '80%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
     elevation: 10,
   },
   successIconContainer: {
