@@ -1,7 +1,10 @@
 // App.js
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState } from 'react';
+import { registerRootComponent } from 'expo';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+// Import all screens
 import WelcomeScreen from './screens/WelcomeScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -10,10 +13,13 @@ import VerificationScreen from './screens/VerificationScreen';
 import FoodTypeSelectionScreen from './screens/FoodTypeSelectionScreen';
 import FoodInteractionScreen from './screens/FoodInteractionScreen';
 import AdminScreen from './screens/AdminScreen';
+import GovernmentDashboard from './screens/GovernmentDashboard';
 
 // Create Language Context
 export const LanguageContext = createContext();
+
 const Stack = createNativeStackNavigator();
+
 export default function App() {
   const [language, setLanguage] = useState('en'); // 'en' for English, 'ar' for Arabic
   
@@ -246,7 +252,17 @@ export default function App() {
       adminLoggedOut: "Admin logged out successfully",
       adminDashboard: "Admin Dashboard",
       registeredUsers: "Registered Users",
-      recentDonations: "Recent Donations"
+      recentDonations: "Recent Donations",
+      specifyCookedUncooked: "Specify if cooked or uncooked",
+      fillDetails: "Fill in the required details",
+      yes: "Yes",
+      no: "No",
+      items: "Items",
+      kg: "Kg",
+      liters: "Liters",
+      orders: "Orders",
+      points: "Points",
+      cancel: "Cancel",
     },
     ar: {
       // WelcomeScreen translations
@@ -475,7 +491,17 @@ export default function App() {
       adminLoggedOut: "تم تسجيل خروج المشرف بنجاح",
       adminDashboard: "لوحة تحكم المشرف",
       registeredUsers: "المستخدمون المسجلون",
-      recentDonations: "التبرعات الأخيرة"
+      recentDonations: "التبرعات الأخيرة",
+      specifyCookedUncooked: "حدد إذا كان مطبوخًا أو غير مطبوخ",
+      fillDetails: "املأ التفاصيل المطلوبة",
+      yes: "نعم",
+      no: "لا",
+      items: "عناصر",
+      kg: "كجم",
+      liters: "لتر",
+      orders: "الطلبات",
+      points: "نقاط",
+      cancel: "إلغاء",
     }
   };
   
@@ -528,10 +554,14 @@ export default function App() {
               headerShown: false,
             }}
           />
-          {/* Add AdminScreen to the stack */}
           <Stack.Screen 
             name="Admin" 
             component={AdminScreen} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="GovernmentDashboard" 
+            component={GovernmentDashboard} 
             options={{ headerShown: false }} 
           />
         </Stack.Navigator>
@@ -539,3 +569,6 @@ export default function App() {
     </LanguageContext.Provider>
   );
 }
+
+// Register the main component
+registerRootComponent(App);
