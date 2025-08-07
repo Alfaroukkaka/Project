@@ -1,3 +1,4 @@
+// screens/FoodInteractionScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -19,6 +20,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import axios from 'axios';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
@@ -66,6 +68,7 @@ export default function FoodInteractionScreen() {
   const [messages, setMessages] = useState(route.params.messages || []);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showCompleteGuide, setShowCompleteGuide] = useState(false);
   
   // New states for cooked/uncooked food
   const [isCooked, setIsCooked] = useState(null);
@@ -81,6 +84,11 @@ export default function FoodInteractionScreen() {
   // New states for location and map
   const [showMapModal, setShowMapModal] = useState(false);
   const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  
+  // New state for AI photo analysis
+  const [aiPhotoLoading, setAiPhotoLoading] = useState(false);
   
   const [editedUserData, setEditedUserData] = useState({
     name: userData.name || '',
@@ -95,10 +103,28 @@ export default function FoodInteractionScreen() {
     setDarkMode(colorScheme === 'dark');
   }, [colorScheme]);
   
-  // Load user data on component mount
+  // Load user data on component mount and when screen comes into focus
   useEffect(() => {
     loadUserData();
     checkForApprovalNotification();
+    
+    // Add focus listener to refresh data when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserData();
+      checkForApprovalNotification();
+    });
+    return unsubscribe;
+  }, [navigation]);
+  
+  // Request location permission on component mount
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+        return;
+      }
+    })();
   }, []);
   
   // Save user data when points or donation history changes
@@ -329,7 +355,7 @@ export default function FoodInteractionScreen() {
     }
   };
   
-  // Handle marking order as done
+  // Handle marking order as done and award points
   const handleMarkAsDone = async (orderId) => {
     try {
       // Update the order to mark as acknowledged
@@ -338,24 +364,68 @@ export default function FoodInteractionScreen() {
       );
       setActiveOrders(updatedOrders);
       
-      // Update in AsyncStorage
-      if (userData.email && !isGuest) {
-        const usersJson = await AsyncStorage.getItem('users');
-        if (usersJson) {
-          const users = JSON.parse(usersJson);
-          const userIndex = users.findIndex(u => u.email === userData.email);
-          
-          if (userIndex !== -1) {
-            users[userIndex].activeOrders = updatedOrders;
-            await AsyncStorage.setItem('users', JSON.stringify(users));
-          }
-        }
+      // Find the order to check if it's a donation and if points should be awarded
+      const order = activeOrders.find(o => o.id === orderId);
+      
+      // Award points only for completed donations that haven't been awarded points yet
+      if (order && order.type === 'donation' && order.status === 'completed' && !order.pointsAwarded) {
+        // Award 20 points for completed donation
+        const newPoints = points + 20;
+        setPoints(newPoints);
+        
+        // Update donation history to reflect points earned
+        const updatedDonationHistory = donationHistory.map(item => 
+          item.id === orderId ? { ...item, pointsEarned: 20 } : item
+        );
+        setDonationHistory(updatedDonationHistory);
+        
+        // Update the order to mark points as awarded
+        const finalUpdatedOrders = updatedOrders.map(o => 
+          o.id === orderId ? { ...o, pointsAwarded: true } : o
+        );
+        setActiveOrders(finalUpdatedOrders);
+        
+        // Show points award notification
+        Alert.alert('Points Awarded!', 'You earned 20 points for your completed donation!');
       }
       
       // Show confirmation
       Alert.alert('Order Completed', 'Thank you for your contribution!');
     } catch (error) {
       console.error('Error marking order as done:', error);
+    }
+  };
+  
+  // Get current location
+  const getCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Permission to access location was denied');
+        setLocationLoading(false);
+        return;
+      }
+      
+      let location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      
+      // Reverse geocoding to get address
+      let address = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      if (address && address.length > 0) {
+        const currentAddress = `${address[0].street}, ${address[0].city}, ${address[0].region}`;
+        setLocation(currentAddress);
+        setCurrentLocation({ latitude, longitude, address: currentAddress });
+      } else {
+        setLocation(`Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`);
+        setCurrentLocation({ latitude, longitude });
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Error', 'Failed to get current location');
+    } finally {
+      setLocationLoading(false);
     }
   };
   
@@ -510,6 +580,7 @@ export default function FoodInteractionScreen() {
       borderRadius: 10,
       borderColor: darkMode ? '#444' : '#ccc',
       borderWidth: 1,
+      marginBottom: 30,
     },
     aiButton: {
       backgroundColor: '#2196F3',
@@ -532,12 +603,15 @@ export default function FoodInteractionScreen() {
       alignItems: 'flex-start',
       marginBottom: 10,
     },
+    descriptionButtonsContainer: {
+      flexDirection: 'row',
+      marginLeft: 10,
+    },
     aiSuggestionButton: {
       padding: 8,
-      marginLeft: 10,
-      marginTop: 10,
       backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
       borderRadius: 8,
+      marginRight: 5,
     },
     
     // Location container
@@ -546,7 +620,7 @@ export default function FoodInteractionScreen() {
       alignItems: 'center',
       marginBottom: 10,
     },
-    mapButton: {
+    locationButton: {
       padding: 8,
       marginLeft: 10,
       backgroundColor: darkMode ? '#2C2C2C' : '#f0f0f0',
@@ -1361,7 +1435,7 @@ export default function FoodInteractionScreen() {
       textAlign: isRTL ? 'right' : 'left',
     },
     appGuideContainer: {
-      marginTop: 30,
+      marginTop: 10,
       backgroundColor: darkMode ? '#2C2C2C' : '#f8f9fa',
       padding: 20,
       borderRadius: 12,
@@ -1401,6 +1475,17 @@ export default function FoodInteractionScreen() {
     guideBoldText: {
       fontWeight: 'bold',
       color: darkMode ? '#4CAF50' : '#2e8b57',
+    },
+    guideButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 15,
+      backgroundColor: darkMode ? '#2C2C2C' : '#f8f9fa',
+      borderRadius: 12,
+      borderColor: darkMode ? '#444' : '#e0e0e0',
+      borderWidth: 1,
+      marginBottom: 10,
     },
     
     // Donation History Detail Styles
@@ -1506,6 +1591,34 @@ export default function FoodInteractionScreen() {
     if (!result.canceled) setProfileImage(result.assets[0].uri);
   };
   
+  // Handle taking photo for AI analysis
+  const handleTakePhotoForAI = async () => {
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 });
+    if (!result.canceled) {
+      setAiPhotoLoading(true);
+      // Simulate AI analysis
+      setTimeout(() => {
+        let aiAnalysis = '';
+        if (mode === 'donate') {
+          if (isCooked) {
+            aiAnalysis = `AI Analysis: This appears to be ${isNew ? 'freshly cooked' : 'leftover'} food suitable for ${people || '4'} people. 
+            ${isConsumable ? 'It is safe for human consumption.' : 'It is not suitable for human consumption.'}
+            Please handle with care and consume within 24 hours.`;
+          } else {
+            aiAnalysis = `AI Analysis: This appears to be ${uncookedType || 'uncooked food'} in the quantity of ${uncookedQuantity || '5'} ${uncookedUnit || 'items'}.
+            It is uncooked and sealed in original packaging. Suitable for ${people || '4'} people.`;
+          }
+        } else {
+          aiAnalysis = `AI Analysis: This appears to be a request for food assistance for ${requestPeople || 'a family'}. 
+          ${requestReason || 'The reason is financial difficulties.'} 
+          Any non-perishable items would be greatly appreciated.`;
+        }
+        setDescription(aiAnalysis);
+        setAiPhotoLoading(false);
+      }, 2000);
+    }
+  };
+  
   const handleSubmitDonation = () => {
     // Validate based on cooked or uncooked
     if (isCooked === null) {
@@ -1547,6 +1660,8 @@ export default function FoodInteractionScreen() {
       userEmail: userData.email,
       isCooked: isCooked,
       description: description, // Add description
+      coordinates: currentLocation, // Add coordinates
+      pointsAwarded: false, // Track if points have been awarded
     };
     
     if (isCooked) {
@@ -1567,10 +1682,10 @@ export default function FoodInteractionScreen() {
     // Add to active orders
     setActiveOrders(prevOrders => [orderItem, ...prevOrders]);
     
-    // Add to donation history
+    // Add to donation history with 0 points initially
     const historyItem = {
       ...orderItem,
-      pointsEarned: 0, // Points will be added when approved
+      pointsEarned: 0, // Points will be added when completed
     };
     setDonationHistory(prevHistory => [historyItem, ...prevHistory]);
     
@@ -1593,6 +1708,7 @@ export default function FoodInteractionScreen() {
     setUncookedQuantity('');
     setUncookedUnit('items');
     setDescription(''); // Reset description
+    setCurrentLocation(null); // Reset current location
   };
   
   const handleSubmitRequest = () => {
@@ -1619,6 +1735,7 @@ export default function FoodInteractionScreen() {
       userName: userData.name,
       userEmail: userData.email,
       description: description, // Add description
+      coordinates: currentLocation, // Add coordinates
     };
     
     // Add to active orders
@@ -1631,6 +1748,7 @@ export default function FoodInteractionScreen() {
     setLocation('');
     setPhone('');
     setDescription(''); // Reset description
+    setCurrentLocation(null); // Reset current location
   };
   
   const handleAIRequest = async () => {
@@ -1699,8 +1817,12 @@ export default function FoodInteractionScreen() {
   
   // Use current location
   const useCurrentLocation = () => {
-    setLocation('Current Location (GPS)');
-    setShowMapModal(false);
+    if (currentLocation) {
+      setLocation(currentLocation.address || `Lat: ${currentLocation.latitude.toFixed(4)}, Lng: ${currentLocation.longitude.toFixed(4)}`);
+      setShowMapModal(false);
+    } else {
+      Alert.alert('No Location', 'Please get your current location first');
+    }
   };
   
   // Logout function that clears only session data but preserves user data
@@ -1713,6 +1835,7 @@ export default function FoodInteractionScreen() {
       // Reset local state for session-specific data
       // But keep activeOrders and messages as they are saved in AsyncStorage
       setProfileImage(null);
+      setCurrentLocation(null);
       
       // Close settings modal
       setSettingsVisible(false);
@@ -1944,6 +2067,14 @@ export default function FoodInteractionScreen() {
             <Text style={dynamicStyles.orderLabel}>Location:</Text>
             <Text style={dynamicStyles.orderValue}>{item.location}</Text>
           </View>
+          
+          {/* Show points only if they've been awarded */}
+          {item.type === 'donation' && item.pointsAwarded && (
+            <View style={dynamicStyles.orderDetail}>
+              <Text style={dynamicStyles.orderLabel}>Points:</Text>
+              <Text style={dynamicStyles.orderValue}>+20</Text>
+            </View>
+          )}
           
           <Text style={[dynamicStyles.orderStatus, statusStyle]}>{statusText}</Text>
         </View>
@@ -2292,7 +2423,7 @@ export default function FoodInteractionScreen() {
                 </>
               )}
               
-              {/* Description field with AI suggestion */}
+              {/* Description field with AI suggestion and photo analysis */}
               <Text style={dynamicStyles.question}>Description</Text>
               <View style={dynamicStyles.descriptionContainer}>
                 <TextInput
@@ -2303,12 +2434,25 @@ export default function FoodInteractionScreen() {
                   placeholderTextColor={darkMode ? '#888' : '#999'}
                   multiline
                 />
-                <TouchableOpacity
-                  style={dynamicStyles.aiSuggestionButton}
-                  onPress={generateAISuggestion}
-                >
-                  <Ionicons name="bulb-outline" size={24} color="#2196F3" />
-                </TouchableOpacity>
+                <View style={dynamicStyles.descriptionButtonsContainer}>
+                  <TouchableOpacity
+                    style={dynamicStyles.aiSuggestionButton}
+                    onPress={generateAISuggestion}
+                  >
+                    <Ionicons name="bulb-outline" size={24} color="#2196F3" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={dynamicStyles.aiSuggestionButton}
+                    onPress={handleTakePhotoForAI}
+                    disabled={aiPhotoLoading}
+                  >
+                    {aiPhotoLoading ? (
+                      <ActivityIndicator size="small" color="#2196F3" />
+                    ) : (
+                      <Ionicons name="camera-outline" size={24} color="#2196F3" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
               
               <Text style={dynamicStyles.question}>{t('uploadPhoto')}</Text>
@@ -2322,7 +2466,7 @@ export default function FoodInteractionScreen() {
               </View>
               {imageUri && <Image source={{ uri: imageUri }} style={dynamicStyles.preview} />}
               
-              {/* Location field with map integration */}
+              {/* Location field with real location integration */}
               <Text style={dynamicStyles.question}>{t('location')}</Text>
               <View style={dynamicStyles.locationContainer}>
                 <TextInput
@@ -2333,10 +2477,15 @@ export default function FoodInteractionScreen() {
                   placeholderTextColor={darkMode ? '#888' : '#999'}
                 />
                 <TouchableOpacity
-                  style={dynamicStyles.mapButton}
-                  onPress={() => setShowMapModal(true)}
+                  style={dynamicStyles.locationButton}
+                  onPress={getCurrentLocation}
+                  disabled={locationLoading}
                 >
-                  <Ionicons name="map-outline" size={24} color="#2196F3" />
+                  {locationLoading ? (
+                    <ActivityIndicator size="small" color="#2196F3" />
+                  ) : (
+                    <Ionicons name="location-outline" size={24} color="#2196F3" />
+                  )}
                 </TouchableOpacity>
               </View>
               
@@ -2376,7 +2525,7 @@ export default function FoodInteractionScreen() {
                 placeholderTextColor={darkMode ? '#888' : '#999'}
               />
               
-              {/* Description field with AI suggestion */}
+              {/* Description field with AI suggestion and photo analysis */}
               <Text style={dynamicStyles.question}>Description</Text>
               <View style={dynamicStyles.descriptionContainer}>
                 <TextInput
@@ -2387,15 +2536,28 @@ export default function FoodInteractionScreen() {
                   placeholderTextColor={darkMode ? '#888' : '#999'}
                   multiline
                 />
-                <TouchableOpacity
-                  style={dynamicStyles.aiSuggestionButton}
-                  onPress={generateAISuggestion}
-                >
-                  <Ionicons name="bulb-outline" size={24} color="#2196F3" />
-                </TouchableOpacity>
+                <View style={dynamicStyles.descriptionButtonsContainer}>
+                  <TouchableOpacity
+                    style={dynamicStyles.aiSuggestionButton}
+                    onPress={generateAISuggestion}
+                  >
+                    <Ionicons name="bulb-outline" size={24} color="#2196F3" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={dynamicStyles.aiSuggestionButton}
+                    onPress={handleTakePhotoForAI}
+                    disabled={aiPhotoLoading}
+                  >
+                    {aiPhotoLoading ? (
+                      <ActivityIndicator size="small" color="#2196F3" />
+                    ) : (
+                      <Ionicons name="camera-outline" size={24} color="#2196F3" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
               
-              {/* Location field with map integration */}
+              {/* Location field with real location integration */}
               <Text style={dynamicStyles.question}>{t('location')}</Text>
               <View style={dynamicStyles.locationContainer}>
                 <TextInput
@@ -2406,10 +2568,15 @@ export default function FoodInteractionScreen() {
                   placeholderTextColor={darkMode ? '#888' : '#999'}
                 />
                 <TouchableOpacity
-                  style={dynamicStyles.mapButton}
-                  onPress={() => setShowMapModal(true)}
+                  style={dynamicStyles.locationButton}
+                  onPress={getCurrentLocation}
+                  disabled={locationLoading}
                 >
-                  <Ionicons name="map-outline" size={24} color="#2196F3" />
+                  {locationLoading ? (
+                    <ActivityIndicator size="small" color="#2196F3" />
+                  ) : (
+                    <Ionicons name="location-outline" size={24} color="#2196F3" />
+                  )}
                 </TouchableOpacity>
               </View>
               
@@ -2447,93 +2614,101 @@ export default function FoodInteractionScreen() {
                 {aiResponse !== '' && <Text style={dynamicStyles.aiResponse}>{aiResponse}</Text>}
               </View>
               
-              <View style={dynamicStyles.appGuideContainer}>
+              <TouchableOpacity 
+                style={dynamicStyles.guideButton}
+                onPress={() => setShowCompleteGuide(!showCompleteGuide)}
+              >
                 <Text style={dynamicStyles.guideTitle}>📱 Tawfeer - Complete Guide</Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>🎯 About Tawfeer</Text>
-                <Text style={dynamicStyles.guideText}>
-                  Tawfeer is a smart mobile application built in the UAE to combat one of the most serious global challenges: food waste. 
-                  It helps individuals, restaurants, supermarkets, and organizations donate or repurpose food instead of wasting it.
-                </Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>🌟 Our Goals</Text>
-                <Text style={dynamicStyles.guideText}>
-                  • Reduce food waste across UAE homes and businesses{'\n'}
-                  • Promote donation of safe, edible food{'\n'}
-                  • Support UAE Vision 2031 sustainability goals{'\n'}
-                  • Use AI to analyze ingredients and give recipe tips{'\n'}
-                  • Reward users to encourage repeated contributions{'\n'}
-                  • Build a community focused on sustainability
-                </Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>📖 How to Use Tawfeer</Text>
-                
-                <Text style={dynamicStyles.guideSubTitle}>🍽️ Donating Food:</Text>
-                <Text style={dynamicStyles.guideText}>
-                  1. Click "Donate Food" on the main screen{'\n'}
-                  2. Specify if the food is cooked or uncooked{'\n'}
-                  3. Fill in the required details based on food type{'\n'}
-                  4. Add a description for your donation{'\n'}
-                  5. Take or upload a photo of the food{'\n'}
-                  6. Enter your location and phone number{'\n'}
-                  7. Submit - earn 20 points and help the community!
-                </Text>
-                
-                <Text style={dynamicStyles.guideSubTitle}>🙏 Requesting Food:</Text>
-                <Text style={dynamicStyles.guideText}>
-                  1. Click "Request Food" on the main screen{'\n'}
-                  2. Explain why you need food assistance{'\n'}
-                  3. Specify how many people will be served{'\n'}
-                  4. Add a description for your request{'\n'}
-                  5. Enter your location and contact information{'\n'}
-                  6. Submit your request - we'll contact you soon!
-                </Text>
-                
-                <Text style={dynamicStyles.guideSubTitle}>🤖 AI Recipe Assistant:</Text>
-                <Text style={dynamicStyles.guideText}>
-                  • Ask AI about cooking with specific ingredients{'\n'}
-                  • Get recipe suggestions for leftover food{'\n'}
-                  • Learn how to make meals with what you have{'\n'}
-                  • Available on every screen for quick help
-                </Text>
-                
-                <Text style={dynamicStyles.guideSubTitle}>⚙️ Settings & Profile:</Text>
-                <Text style={dynamicStyles.guideText}>
-                  • View and edit your profile information{'\n'}
-                  • Check your donation history{'\n'}
-                  • Track your points and contributions{'\n'}
-                  • Customize notifications and appearance{'\n'}
-                  • Get help and support{'\n'}
-                  • Logout when needed
-                </Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>🏆 Points System</Text>
-                <Text style={dynamicStyles.guideText}>
-                  Earn 20 points for each food donation. Points track your positive impact on reducing food waste 
-                  and supporting the community. The more you contribute, the more you help build a sustainable UAE!
-                </Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>🌍 Environmental Impact</Text>
-                <Text style={dynamicStyles.guideText}>
-                  Every donation through Tawfeer helps:{'\n'}
-                  • Reduce methane emissions from food waste{'\n'}
-                  • Save water and energy used in food production{'\n'}
-                  • Support families and individuals in need{'\n'}
-                  • Build a more sustainable UAE community
-                </Text>
-                
-                <Text style={dynamicStyles.guideSectionTitle}>👥 User Types</Text>
-                <Text style={dynamicStyles.guideText}>
-                  • <Text style={dynamicStyles.guideBoldText}>{t('household')}:</Text> {t('familiesIndividuals')}{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>{t('restaurant')}:</Text> {t('foodBusinesses')}{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>{t('supermarket')}:</Text> {t('groceryStores')}{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>{t('organization')}:</Text> {t('ngosCompanies')}{'\n'}
-                  • <Text style={dynamicStyles.guideBoldText}>{t('guest')}:</Text> {t('temporaryAccess')}
-                </Text>
-                
-                {/* Bottom spacing for better scrolling */}
-                <View style={{height: 40}} />
-              </View>
+                <Text style={dynamicStyles.guideTitle}>{showCompleteGuide ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              
+              {showCompleteGuide && (
+                <View style={dynamicStyles.appGuideContainer}>
+                  <Text style={dynamicStyles.guideSectionTitle}>🎯 About Tawfeer</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    Tawfeer is a smart mobile application built in the UAE to combat one of the most serious global challenges: food waste. 
+                    It helps individuals, restaurants, supermarkets, and organizations donate or repurpose food instead of wasting it.
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSectionTitle}>🌟 Our Goals</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    • Reduce food waste across UAE homes and businesses{'\n'}
+                    • Promote donation of safe, edible food{'\n'}
+                    • Support UAE Vision 2031 sustainability goals{'\n'}
+                    • Use AI to analyze ingredients and give recipe tips{'\n'}
+                    • Reward users to encourage repeated contributions{'\n'}
+                    • Build a community focused on sustainability
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSectionTitle}>📖 How to Use Tawfeer</Text>
+                  
+                  <Text style={dynamicStyles.guideSubTitle}>🍽️ Donating Food:</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    1. Click "Donate Food" on the main screen{'\n'}
+                    2. Specify if the food is cooked or uncooked{'\n'}
+                    3. Fill in the required details based on food type{'\n'}
+                    4. Add a description for your donation{'\n'}
+                    5. Take or upload a photo of the food{'\n'}
+                    6. Enter your location and phone number{'\n'}
+                    7. Submit - earn 20 points when the driver completes the delivery!
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSubTitle}>🙏 Requesting Food:</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    1. Click "Request Food" on the main screen{'\n'}
+                    2. Explain why you need food assistance{'\n'}
+                    3. Specify how many people will be served{'\n'}
+                    4. Add a description for your request{'\n'}
+                    5. Enter your location and contact information{'\n'}
+                    6. Submit your request - we'll contact you soon!
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSubTitle}>🤖 AI Recipe Assistant:</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    • Ask AI about cooking with specific ingredients{'\n'}
+                    • Get recipe suggestions for leftover food{'\n'}
+                    • Learn how to make meals with what you have{'\n'}
+                    • Available on every screen for quick help
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSubTitle}>⚙️ Settings & Profile:</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    • View and edit your profile information{'\n'}
+                    • Check your donation history{'\n'}
+                    • Track your points and contributions{'\n'}
+                    • Customize notifications and appearance{'\n'}
+                    • Get help and support{'\n'}
+                    • Logout when needed
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSectionTitle}>🏆 Points System</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    Earn 20 points for each food donation when the driver completes the delivery. Points track your positive impact on reducing food waste 
+                    and supporting the community. The more you contribute, the more you help build a sustainable UAE!
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSectionTitle}>🌍 Environmental Impact</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    Every donation through Tawfeer helps:{'\n'}
+                    • Reduce methane emissions from food waste{'\n'}
+                    • Save water and energy used in food production{'\n'}
+                    • Support families and individuals in need{'\n'}
+                    • Build a more sustainable UAE community
+                  </Text>
+                  
+                  <Text style={dynamicStyles.guideSectionTitle}>👥 User Types</Text>
+                  <Text style={dynamicStyles.guideText}>
+                    • <Text style={dynamicStyles.guideBoldText}>{t('household')}:</Text> {t('familiesIndividuals')}{'\n'}
+                    • <Text style={dynamicStyles.guideBoldText}>{t('restaurant')}:</Text> {t('foodBusinesses')}{'\n'}
+                    • <Text style={dynamicStyles.guideBoldText}>{t('supermarket')}:</Text> {t('groceryStores')}{'\n'}
+                    • <Text style={dynamicStyles.guideBoldText}>{t('organization')}:</Text> {t('ngosCompanies')}{'\n'}
+                    • <Text style={dynamicStyles.guideBoldText}>{t('guest')}:</Text> {t('temporaryAccess')}
+                  </Text>
+                  
+                  {/* Bottom spacing for better scrolling */}
+                  <View style={{height: 40}} />
+                </View>
+              )}
             </>
           )}
           
@@ -2765,7 +2940,12 @@ export default function FoodInteractionScreen() {
                               <Text style={dynamicStyles.donationDetailValue}>{item.driverName} ({item.driverPhone})</Text>
                             </View>
                             
-                            <Text style={dynamicStyles.donationDetailStatus}>{t('pointsEarned')}: +{item.pointsEarned || 0}</Text>
+                            {/* Only show points if they've been earned */}
+                            {item.pointsEarned > 0 && (
+                              <Text style={dynamicStyles.donationDetailStatus}>
+                                {t('pointsEarned')}: +{item.pointsEarned}
+                              </Text>
+                            )}
                           </View>
                         ))
                       )}
@@ -2941,6 +3121,13 @@ export default function FoodInteractionScreen() {
                       <Text style={dynamicStyles.orderDetailsText}>
                         Status: {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
                       </Text>
+                      {selectedOrder.coordinates && (
+                        <>
+                          <Text style={dynamicStyles.orderDetailsText}>
+                            Coordinates: {selectedOrder.coordinates.latitude.toFixed(4)}, {selectedOrder.coordinates.longitude.toFixed(4)}
+                          </Text>
+                        </>
+                      )}
                     </View>
                     
                     {/* User Information */}
@@ -3034,6 +3221,16 @@ export default function FoodInteractionScreen() {
                             ? `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled'}`
                             : `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled'}`
                           }
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Points Information */}
+                    {selectedOrder.type === 'donation' && selectedOrder.pointsAwarded && (
+                      <View style={dynamicStyles.orderDetailsSection}>
+                        <Text style={dynamicStyles.orderDetailsSectionTitle}>Points Earned</Text>
+                        <Text style={dynamicStyles.orderDetailsText}>
+                          You earned 20 points for this completed donation!
                         </Text>
                       </View>
                     )}
@@ -3167,7 +3364,7 @@ export default function FoodInteractionScreen() {
                   
                   <Text style={dynamicStyles.pointsInfoText}>
                     <Text style={dynamicStyles.boldText}>{t('howToEarnPoints')}</Text>
-                    {'\n'}• {t('donateFood')}: +20 {t('pointsPerDonation')}
+                    {'\n'}• {t('donateFood')}: +20 {t('pointsWhenDriverCompletes')}
                     {'\n'}• {t('helpCommunity')}
                     {'\n'}• {t('reduceFoodWaste')}
                   </Text>
@@ -3226,7 +3423,7 @@ export default function FoodInteractionScreen() {
                     3. {t('fillDetails')}{'\n'}
                     4. {t('uploadPhoto')}{'\n'}
                     5. {t('enterLocationPhone')}{'\n'}
-                    6. {t('submitEarnPoints')}
+                    6. {t('submitEarnPointsWhenCompleted')}
                   </Text>
                   
                   <Text style={dynamicStyles.subTitle}>🙏 {t('requestingFood')}:</Text>
@@ -3258,7 +3455,7 @@ export default function FoodInteractionScreen() {
                   
                   <Text style={dynamicStyles.sectionTitle}>🏆 {t('pointsSystem')}</Text>
                   <Text style={dynamicStyles.infoText}>
-                    {t('pointsSystemDescription')}
+                    {t('pointsSystemWhenCompleted')}
                   </Text>
                   
                   <Text style={dynamicStyles.sectionTitle}>🌍 {t('environmentalImpact')}</Text>
