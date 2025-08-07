@@ -1,3 +1,4 @@
+// screens/WelcomeScreen.js
 import React, { useState, useContext } from 'react';
 import {
   View,
@@ -12,9 +13,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
 
-const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c07730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T18%3A06%3A40Z&ske%3D2025-07-29T18%3A06%3A40Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
 
 export default function WelcomeScreen({ navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
@@ -23,16 +25,15 @@ export default function WelcomeScreen({ navigation }) {
   const [aiResponse, setAiResponse] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
-  
   const userData = {
     name: t('guest'),
     type: t('guest'),
   };
-  
+
   const handleProtectedAction = () => {
     setShowLoginModal(true);
   };
-  
+
   const handleAskAI = () => {
     if (!aiInput.trim()) {
       alert(t('pleaseEnterQuestion'));
@@ -42,12 +43,12 @@ export default function WelcomeScreen({ navigation }) {
       `🍽️ ${t('aiSuggestionPrefix')} ${aiInput}, ${t('aiSuggestionSuffix')}`
     );
   };
-  
+
   // Guest flow
   if (isGuestView) {
     return (
-      <KeyboardAvoidingView 
-        style={{flex: 1}} 
+      <KeyboardAvoidingView
+        style={{flex: 1}}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
@@ -86,7 +87,7 @@ export default function WelcomeScreen({ navigation }) {
                 <Text style={styles.buttonText}>{t('requestFood')}</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.guideButton}
               onPress={() => setShowGuideModal(true)}
             >
@@ -173,12 +174,10 @@ export default function WelcomeScreen({ navigation }) {
                 <View style={styles.guideModalBox}>
                   <Text style={[styles.modalTitle, { textAlign: isRTL ? 'right' : 'left' }]}>📱 {t('tawfeerGuide')}</Text>
                   <ScrollView style={styles.guideModalContent}>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🎯 {t('aboutTawfeer')}</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       {t('tawfeerGuideDescription')}
                     </Text>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🌟 {t('ourGoals')}</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       • {t('reduceFoodWaste')}{'\n'}
@@ -188,9 +187,7 @@ export default function WelcomeScreen({ navigation }) {
                       • {t('rewardUsers')}{'\n'}
                       • {t('buildCommunity')}
                     </Text>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>📖 {t('howToUse')}</Text>
-                    
                     <Text style={[styles.guideSubTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🍽️ {t('donatingFood')}:</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       1. {t('clickDonateFood')}{'\n'}
@@ -201,7 +198,6 @@ export default function WelcomeScreen({ navigation }) {
                       6. {t('enterLocationPhone')}{'\n'}
                       7. {t('submitEarnPoints')}
                     </Text>
-                    
                     <Text style={[styles.guideSubTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🙏 {t('requestingFood')}:</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       1. {t('clickRequestFood')}{'\n'}
@@ -210,7 +206,6 @@ export default function WelcomeScreen({ navigation }) {
                       4. {t('enterContactInfo')}{'\n'}
                       5. {t('submitRequest')}
                     </Text>
-                    
                     <Text style={[styles.guideSubTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🤖 {t('aiAssistant')}:</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       • {t('askAboutIngredients')}{'\n'}
@@ -218,7 +213,6 @@ export default function WelcomeScreen({ navigation }) {
                       • {t('learnToCook')}{'\n'}
                       • {t('availableEverywhere')}
                     </Text>
-                    
                     <Text style={[styles.guideSubTitle, { textAlign: isRTL ? 'right' : 'left' }]}>⚙️ {t('settingsProfile')}:</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       • {t('viewEditProfile')}{'\n'}
@@ -226,12 +220,10 @@ export default function WelcomeScreen({ navigation }) {
                       • {t('trackPoints')}{'\n'}
                       • {t('logout')}
                     </Text>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🏆 {t('pointsSystem')}</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       {t('pointsSystemDescription')}
                     </Text>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>🌍 {t('environmentalImpact')}</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       {t('donationHelps')}:{'\n'}
@@ -240,7 +232,6 @@ export default function WelcomeScreen({ navigation }) {
                       • {t('supportFamilies')}{'\n'}
                       • {t('buildSustainableUAE')}
                     </Text>
-                    
                     <Text style={[styles.guideSectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>👥 {t('userTypes')}</Text>
                     <Text style={[styles.guideText, { textAlign: isRTL ? 'right' : 'left' }]}>
                       • <Text style={styles.guideBoldText}>{t('household')}:</Text> {t('familiesIndividuals')}{'\n'}
@@ -249,7 +240,6 @@ export default function WelcomeScreen({ navigation }) {
                       • <Text style={styles.guideBoldText}>{t('organization')}:</Text> {t('ngosCompanies')}{'\n'}
                       • <Text style={styles.guideBoldText}>{t('guest')}:</Text> {t('temporaryAccess')}
                     </Text>
-                    
                   </ScrollView>
                   <TouchableOpacity
                     style={styles.modalButton}
@@ -266,11 +256,11 @@ export default function WelcomeScreen({ navigation }) {
       </KeyboardAvoidingView>
     );
   }
-  
+
   // Default welcome box
   return (
-    <KeyboardAvoidingView 
-      style={{flex: 1}} 
+    <KeyboardAvoidingView
+      style={{flex: 1}}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ImageBackground
@@ -308,6 +298,13 @@ export default function WelcomeScreen({ navigation }) {
             }}>
               <Text style={[styles.guestText, { textAlign: isRTL ? 'right' : 'left' }]}>{t('continueAsGuest')}</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.driverLoginButton}
+              onPress={() => navigation.navigate('DriverLogin')}
+            >
+              <FontAwesome5 name="car" size={16} color="#fff" />
+              <Text style={styles.driverLoginButtonText}>{t('driverLogin')}</Text>
+            </TouchableOpacity>
             <Text style={[styles.footerText, { textAlign: isRTL ? 'right' : 'left' }]}>{t('madeWithLove')}</Text>
           </View>
         </View>
@@ -319,8 +316,8 @@ export default function WelcomeScreen({ navigation }) {
 const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
   // Background and layout
-  background: { 
-    flex: 1, 
+  background: {
+    flex: 1,
     justifyContent: 'center',
     resizeMode: 'cover',
   },
@@ -331,12 +328,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  container: { 
-    padding: 20, 
-    backgroundColor: 'rgba(255,255,255,0.9)', 
+  container: {
+    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     flexGrow: 1,
   },
-  
   // Logo and branding
   logoContainer: {
     alignItems: 'center',
@@ -365,7 +361,6 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
     marginBottom: 5,
   },
-  
   // Welcome box
   welcomeBox: {
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -379,19 +374,18 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  title: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
     color: '#2E7D32',
     marginBottom: 10,
   },
-  subtitle: { 
-    fontSize: 16, 
-    color: '#555', 
+  subtitle: {
+    fontSize: 16,
+    color: '#555',
     marginTop: 5,
     lineHeight: 22,
   },
-  
   // Buttons
   loginButton: {
     backgroundColor: '#1976D2',
@@ -419,31 +413,44 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  buttonText: { 
-    color: '#fff', 
-    fontWeight: '600', 
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
     fontSize: 16,
   },
-  guestText: { 
-    color: '#1976D2', 
-    textDecorationLine: 'underline', 
+  guestText: {
+    color: '#1976D2',
+    textDecorationLine: 'underline',
     marginTop: 15,
     fontSize: 16,
   },
-  footerText: { 
-    fontSize: 12, 
-    color: '#888', 
+  driverLoginButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FF9800',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  driverLoginButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#888',
     marginTop: 25,
   },
-  
   // Top bar
-  topBar: { 
-    flexDirection: 'row', 
-    justifyContent: 'flex-end', 
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     marginBottom: 20,
   },
-  authButtons: { 
-    flexDirection: 'row', 
+  authButtons: {
+    flexDirection: 'row',
   },
   topButton: {
     backgroundColor: '#1976D2',
@@ -457,31 +464,30 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  topButtonText: { 
-    color: '#fff', 
+  topButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
   },
-  
   // Guest view content
-  header: { 
-    fontSize: 24, 
-    fontWeight: 'bold', 
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 15,
     color: '#2E7D32',
   },
-  subheader: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    marginVertical: 15, 
+  subheader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginVertical: 15,
     color: '#1976D2',
   },
-  buttonRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-evenly', 
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
     marginBottom: 25,
   },
-  selectButton: { 
+  selectButton: {
     backgroundColor: '#F5F5F5',
     padding: 16,
     borderRadius: 12,
@@ -495,10 +501,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  guideButton: { 
-    backgroundColor: '#2E7D32', 
-    padding: 16, 
-    borderRadius: 12, 
+  guideButton: {
+    backgroundColor: '#2E7D32',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 25,
     alignItems: 'center',
     shadowColor: '#2E7D32',
@@ -507,14 +513,13 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  guideButtonText: { 
-    color: '#fff', 
-    fontWeight: '600', 
+  guideButtonText: {
+    color: '#fff',
+    fontWeight: '600',
     fontSize: 16,
   },
-  
   // Description box
-  descriptionBox: { 
+  descriptionBox: {
     backgroundColor: '#fff',
     padding: 20,
     borderRadius: 16,
@@ -525,32 +530,31 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-  descriptionTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#2E7D32', 
+  descriptionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2E7D32',
     marginBottom: 15,
   },
-  descriptionText: { 
-    fontSize: 16, 
-    color: '#333', 
-    marginBottom: 12, 
+  descriptionText: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 12,
     lineHeight: 24,
   },
-  goalHeader: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#333', 
-    marginTop: 20, 
+  goalHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
     marginBottom: 10,
   },
-  goalText: { 
-    fontSize: 16, 
-    color: '#555', 
-    marginBottom: 8, 
+  goalText: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 8,
     lineHeight: 24,
   },
-  
   // AI box
   aiBox: {
     marginTop: 30,
@@ -563,9 +567,9 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-  aiTitle: { 
-    fontWeight: 'bold', 
-    fontSize: 18, 
+  aiTitle: {
+    fontWeight: 'bold',
+    fontSize: 18,
     marginBottom: 12,
     color: '#1976D2',
   },
@@ -578,10 +582,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     fontSize: 16,
   },
-  askButton: { 
-    backgroundColor: '#1976D2', 
-    padding: 16, 
-    borderRadius: 12, 
+  askButton: {
+    backgroundColor: '#1976D2',
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#1976D2',
     shadowOffset: { width: 0, height: 4 },
@@ -589,19 +593,18 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  askButtonText: { 
-    color: '#fff', 
+  askButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  aiAnswer: { 
-    marginTop: 15, 
-    fontStyle: 'italic', 
+  aiAnswer: {
+    marginTop: 15,
+    fontStyle: 'italic',
     color: '#555',
     fontSize: 16,
     lineHeight: 24,
   },
-  
   // Modals
   modalOverlay: {
     flex: 1,
@@ -660,22 +663,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2E7D32',
   },
-  modalTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 15,
     color: '#2E7D32',
   },
-  modalMessage: { 
-    fontSize: 16, 
-    marginBottom: 25, 
+  modalMessage: {
+    fontSize: 16,
+    marginBottom: 25,
     color: '#555',
     lineHeight: 24,
   },
-  modalButton: { 
-    backgroundColor: '#1976D2', 
-    paddingVertical: 12, 
-    paddingHorizontal: 30, 
+  modalButton: {
+    backgroundColor: '#1976D2',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
     borderRadius: 8,
     shadowColor: '#1976D2',
     shadowOffset: { width: 0, height: 4 },
@@ -683,9 +686,9 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  modalButtonText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
+  modalButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
     fontSize: 16,
   },
 });
