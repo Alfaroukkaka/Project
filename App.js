@@ -14,6 +14,8 @@ import FoodTypeSelectionScreen from './screens/FoodTypeSelectionScreen';
 import FoodInteractionScreen from './screens/FoodInteractionScreen';
 import AdminScreen from './screens/AdminScreen';
 import GovernmentDashboard from './screens/GovernmentDashboard';
+import DriverDashboard from './screens/DriverDashboard';
+import DriverLoginScreen from './screens/DriverLoginScreen';
 
 // Create Language Context
 export const LanguageContext = createContext();
@@ -22,7 +24,7 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   const [language, setLanguage] = useState('en'); // 'en' for English, 'ar' for Arabic
-  
+
   // Translation object
   const translations = {
     en: {
@@ -58,6 +60,7 @@ export default function App() {
       register: "Register",
       continueAsGuest: "Continue as Guest",
       madeWithLove: "Made with ❤️ for UAE",
+      driverLogin: "Driver Login",
       
       // LoginScreen translations
       loginSubtitle: "Login to your account",
@@ -297,6 +300,7 @@ export default function App() {
       register: "إنشاء حساب",
       continueAsGuest: "متابعة كضيف",
       madeWithLove: "صُنع بـ ❤️ من أجل الإمارات",
+      driverLogin: "تسجيل دخول السائق",
       
       // LoginScreen translations
       loginSubtitle: "تسجيل الدخول إلى حسابك",
@@ -504,65 +508,75 @@ export default function App() {
       cancel: "إلغاء",
     }
   };
-  
+
   // Helper function to get translations
   const t = (key) => translations[language][key] || key;
-  
+
   // Determine if RTL layout is needed
   const isRTL = language === 'ar';
-  
+
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t, isRTL }}>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="Welcome">
-          <Stack.Screen 
-            name="Welcome" 
-            component={WelcomeScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Register" 
-            component={RegisterScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Login" 
-            component={LoginScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Guest" 
-            component={GuestScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Guest"
+            component={GuestScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Verification" 
-            component={VerificationScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Verification"
+            component={VerificationScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="FoodTypeSelection" 
-            component={FoodTypeSelectionScreen} 
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="FoodInteraction" 
+          <Stack.Screen
+            name="FoodTypeSelection"
+            component={FoodTypeSelectionScreen}
+            options={{ headerShown: false }}
+          /> 
+          <Stack.Screen
+            name="FoodInteraction"
             component={FoodInteractionScreen}
             options={{
-              headerLeft: () => null,  // This removes the back arrow
-              gestureEnabled: false,   // This disables swipe back gesture
+              headerLeft: () => null, // This removes the back arrow
+              gestureEnabled: false, // This disables swipe back gesture
               headerShown: false,
             }}
           />
-          <Stack.Screen 
-            name="Admin" 
-            component={AdminScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Admin"
+            component={AdminScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="GovernmentDashboard" 
-            component={GovernmentDashboard} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="GovernmentDashboard"
+            component={GovernmentDashboard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="DriverDashboard"
+            component={DriverDashboard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="DriverLogin"
+            component={DriverLoginScreen}
+            options={{ headerShown: false }}
           />
         </Stack.Navigator>
       </NavigationContainer>
