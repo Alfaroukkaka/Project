@@ -1,3 +1,4 @@
+// screens/AdminScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -19,7 +20,7 @@ import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-ico
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b&scid=6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-07-28T19%3A29%3A10Z&ske=2025-07-29T19%3A29%3A10Z&sks=b&skv=2024-08-04&sig=XzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3D1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T19%3A29%3A10Z&ske%3D2025-07-29T19%3A29%3A10Z&sks%3Db&skv%3D2024-08-04&sig%3DXzlWCkpkIXxTAW/KdVDRLSff3wLkc8QMpA3siJNiCHU%3D';
 
 export default function AdminScreen({ navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
@@ -33,6 +34,7 @@ export default function AdminScreen({ navigation }) {
     pendingOrders: 0,
     approvedOrders: 0,
     completedOrders: 0,
+    totalDrivers: 0,
   });
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -42,9 +44,20 @@ export default function AdminScreen({ navigation }) {
   const [driverPhone, setDriverPhone] = useState('');
   const [estimatedTime, setEstimatedTime] = useState('');
   
+  // Added state variables for driver management
+  const [drivers, setDrivers] = useState([]);
+  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [newDriver, setNewDriver] = useState({
+    name: '',
+    username: '',
+    password: '',
+    phone: '',
+  });
+  
   // Load admin data on component mount
   useEffect(() => {
     loadAdminData();
+    loadDrivers();
   }, []);
   
   // Load all data for admin dashboard
@@ -97,16 +110,111 @@ export default function AdminScreen({ navigation }) {
         pendingOrders,
         approvedOrders,
         completedOrders,
+        totalDrivers: drivers.length,
       });
     } catch (error) {
       console.error('Error loading admin data:', error);
     }
   };
   
+  // Added function to load drivers
+  const loadDrivers = async () => {
+    try {
+      const driversJson = await AsyncStorage.getItem('drivers');
+      if (driversJson) {
+        const driversData = JSON.parse(driversJson);
+        setDrivers(driversData);
+        // Update stats with driver count
+        setStats(prev => ({
+          ...prev,
+          totalDrivers: driversData.length
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading drivers:', error);
+    }
+  };
+  
+  // Added function to handle adding a new driver
+  const handleAddDriver = async () => {
+    if (!newDriver.name || !newDriver.username || !newDriver.password) {
+      Alert.alert('Missing Information', 'Please fill in all required fields');
+      return;
+    }
+    
+    try {
+      // Check if username already exists
+      if (drivers.some(driver => driver.username === newDriver.username)) {
+        Alert.alert('Username Exists', 'This username is already taken');
+        return;
+      }
+      
+      // Add new driver
+      const updatedDrivers = [...drivers, {...newDriver, id: Date.now()}];
+      setDrivers(updatedDrivers);
+      await AsyncStorage.setItem('drivers', JSON.stringify(updatedDrivers));
+      
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        totalDrivers: updatedDrivers.length
+      }));
+      
+      // Reset form and close modal
+      setNewDriver({
+        name: '',
+        username: '',
+        password: '',
+        phone: '',
+      });
+      setShowDriverModal(false);
+      
+      Alert.alert('Success', 'Driver assigned successfully');
+    } catch (error) {
+      console.error('Error adding driver:', error);
+      Alert.alert('Error', 'Failed to assign driver');
+    }
+  };
+  
+  // Added function to handle deleting a driver
+  const handleDeleteDriver = (index) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to remove this driver?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedDrivers = [...drivers];
+              updatedDrivers.splice(index, 1);
+              setDrivers(updatedDrivers);
+              await AsyncStorage.setItem('drivers', JSON.stringify(updatedDrivers));
+              
+              // Update stats
+              setStats(prev => ({
+                ...prev,
+                totalDrivers: updatedDrivers.length
+              }));
+              
+              Alert.alert('Success', 'Driver removed successfully');
+            } catch (error) {
+              console.error('Error deleting driver:', error);
+              Alert.alert('Error', 'Failed to remove driver');
+            }
+          },
+        },
+      ]
+    );
+  };
+  
   // Refresh data
   const onRefresh = async () => {
     setRefreshing(true);
     await loadAdminData();
+    await loadDrivers();
     setRefreshing(false);
   };
   
@@ -151,27 +259,6 @@ export default function AdminScreen({ navigation }) {
         if (orderIndex !== -1) {
           usersData[userIndex].activeOrders[orderIndex] = updatedOrder;
           
-          // Add points if it's a donation
-          if (selectedOrder.type === 'donation') {
-            usersData[userIndex].points += 20;
-            
-            // Update donation history
-            const donationIndex = usersData[userIndex].donationHistory.findIndex(
-              d => d.id === selectedOrder.id
-            );
-            
-            if (donationIndex !== -1) {
-              usersData[userIndex].donationHistory[donationIndex] = {
-                ...usersData[userIndex].donationHistory[donationIndex],
-                status: 'approved',
-                driverName,
-                driverPhone,
-                estimatedPickup: estimatedTime,
-                pointsEarned: 20,
-              };
-            }
-          }
-          
           // Save updated users data
           await AsyncStorage.setItem('users', JSON.stringify(usersData));
           
@@ -188,7 +275,7 @@ export default function AdminScreen({ navigation }) {
     }
   };
   
-  // Complete order
+  // Complete order (Updated to remove automatic point awarding)
   const completeOrder = async () => {
     try {
       // Update order status
@@ -224,11 +311,15 @@ export default function AdminScreen({ navigation }) {
               usersData[userIndex].donationHistory[donationIndex] = {
                 ...usersData[userIndex].donationHistory[donationIndex],
                 status: 'completed',
+                driverName,
+                driverPhone,
+                estimatedPickup: estimatedTime,
+                // Remove automatic pointsEarned - points will be awarded by driver
               };
             }
           }
           
-          // Add completion message
+          // Add completion message (without automatic points)
           const completionMessage = {
             id: Date.now(),
             type: 'completion',
@@ -341,6 +432,7 @@ ${t('totalAccounts')}: ${stats.totalUsers}
 ${t('totalOrders')}: ${stats.totalOrders}
 ${t('totalPoints')}: ${stats.totalPoints}
 ${t('activeUsers')}: ${stats.activeUsers}
+Total Drivers: ${stats.totalDrivers}
 Pending Orders: ${stats.pendingOrders}
 Approved Orders: ${stats.approvedOrders}
 Completed Orders: ${stats.completedOrders}
@@ -454,6 +546,14 @@ ${users
             <Text style={styles.orderLabel}>Date:</Text>
             <Text style={styles.orderValue}>{item.date}</Text>
           </View>
+          
+          {/* Show points only if they've been awarded by driver */}
+          {item.type === 'donation' && item.pointsEarned > 0 && (
+            <View style={styles.orderDetail}>
+              <Text style={styles.orderLabel}>Points Awarded:</Text>
+              <Text style={styles.orderValue}>{item.pointsEarned}</Text>
+            </View>
+          )}
         </View>
         
         {item.imageUri && (
@@ -531,6 +631,23 @@ ${users
     </View>
   );
   
+  // Added render driver item function
+  const renderDriverItem = ({ item, index }) => (
+    <View style={styles.driverCard}>
+      <View style={styles.driverInfo}>
+        <FontAwesome5 name="user" size={16} color="#2196F3" />
+        <Text style={styles.driverName}>{item.name}</Text>
+      </View>
+      <Text style={styles.driverUsername}>{item.username}</Text>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => handleDeleteDriver(index)}
+      >
+        <FontAwesome5 name="trash" size={14} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+  
   return (
     <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
       <View style={[styles.container, { backgroundColor: darkMode ? 'rgba(18,18,18,0.85)' : 'rgba(245,245,245,0.85)' }]}>
@@ -592,6 +709,12 @@ ${users
               <Text style={styles.statNumber}>{stats.totalPoints}</Text>
               <Text style={styles.statLabel}>{t('totalPoints')}</Text>
             </View>
+            {/* Added Drivers Stat Card */}
+            <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
+              <FontAwesome5 name="car" size={24} color="#fff" />
+              <Text style={styles.statNumber}>{stats.totalDrivers}</Text>
+              <Text style={styles.statLabel}>Drivers</Text>
+            </View>
           </ScrollView>
           
           {/* Orders Section */}
@@ -625,181 +748,280 @@ ${users
             />
           </View>
           
-          {/* Bottom spacing */}
-          <View style={{ height: 20 }} />
-        </ScrollView>
-        
-        {/* Order Details Modal */}
-        <Modal visible={showOrderModal} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {selectedOrder?.type === 'donation' ? 'Donation' : 'Request'} Details
-                </Text>
-                <TouchableOpacity onPress={() => setShowOrderModal(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              
-              {selectedOrder && (
-                <ScrollView style={styles.modalScroll}>
-                  {/* Order Information */}
-                  <View style={styles.orderDetailSection}>
-                    <Text style={styles.orderDetailSectionTitle}>Order Information</Text>
-                    <Text style={styles.orderDetailText}>
-                      Order ID: #{selectedOrder.id}
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      Type: {selectedOrder.type === 'donation' ? 'Donation' : 'Request'}
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      Status: {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      Date: {selectedOrder.date}
-                    </Text>
-                  </View>
-                  
-                  {/* User Information */}
-                  <View style={styles.orderDetailSection}>
-                    <Text style={styles.orderDetailSectionTitle}>User Information</Text>
-                    <Text style={styles.orderDetailText}>
-                      Name: {selectedOrder.userName}
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      Email: {selectedOrder.userEmail}
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      Phone: {selectedOrder.userPhone}
-                    </Text>
-                  </View>
-                  
-                  {/* Order Details */}
-                  <View style={styles.orderDetailSection}>
-                    <Text style={styles.orderDetailSectionTitle}>
-                      {selectedOrder.type === 'donation' ? 'Donation' : 'Request'} Details
-                    </Text>
-                    <Text style={styles.orderDetailText}>
-                      People: {selectedOrder.people}
-                    </Text>
-                    {selectedOrder.type === 'donation' && (
-                      <>
-                        <Text style={styles.orderDetailText}>
-                          Food Type: {selectedOrder.foodType}
-                        </Text>
-                        <Text style={styles.orderDetailText}>
-                          Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
-                        </Text>
-                        <Text style={styles.orderDetailText}>
-                          Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
-                        </Text>
-                      </>
-                    )}
-                    {selectedOrder.type === 'request' && (
-                      <Text style={styles.orderDetailText}>
-                        Reason: {selectedOrder.reason}
-                      </Text>
-                    )}
-                    <Text style={styles.orderDetailText}>
-                      Location: {selectedOrder.location}
-                    </Text>
-                  </View>
-                  
-                  {/* Image */}
-                  {selectedOrder.imageUri && (
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Food Image</Text>
-                      <Image 
-                        source={{ uri: selectedOrder.imageUri }} 
-                        style={styles.orderDetailImage} 
-                      />
-                    </View>
-                  )}
-                  
-                  {/* Driver Assignment (for pending orders) */}
-                  {selectedOrder.status === 'pending' && (
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Assign Driver</Text>
-                      <TextInput
-                        style={styles.driverInput}
-                        placeholder="Driver Name"
-                        value={driverName}
-                        onChangeText={setDriverName}
-                      />
-                      <TextInput
-                        style={styles.driverInput}
-                        placeholder="Driver Phone"
-                        value={driverPhone}
-                        onChangeText={setDriverPhone}
-                        keyboardType="phone-pad"
-                      />
-                      <TextInput
-                        style={styles.driverInput}
-                        placeholder={
-                          selectedOrder.type === 'donation' 
-                            ? 'Estimated Pickup Time' 
-                            : 'Estimated Delivery Time'
-                        }
-                        value={estimatedTime}
-                        onChangeText={setEstimatedTime}
-                      />
-                    </View>
-                  )}
-                  
-                  {/* Driver Information (for approved orders) */}
-                  {(selectedOrder.status === 'approved' || selectedOrder.status === 'completed') && (
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Driver Information</Text>
-                      <Text style={styles.orderDetailText}>
-                        Name: {selectedOrder.driverName || 'Not assigned'}
-                      </Text>
-                      <Text style={styles.orderDetailText}>
-                        Phone: {selectedOrder.driverPhone || 'Not assigned'}
-                      </Text>
-                      <Text style={styles.orderDetailText}>
-                        {selectedOrder.type === 'donation' 
-                          ? `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled'}`
-                          : `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled'}`
-                        }
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {/* Action Buttons */}
-                  <View style={styles.modalActions}>
-                    {selectedOrder.status === 'pending' && (
-                      <>
-                        <TouchableOpacity
-                          style={[styles.modalButton, styles.approveButton]}
-                          onPress={approveOrder}
-                        >
-                          <Text style={styles.modalButtonText}>Approve Order</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.modalButton, styles.rejectButton]}
-                          onPress={rejectOrder}
-                        >
-                          <Text style={styles.modalButtonText}>Reject Order</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                    
-                    {selectedOrder.status === 'approved' && (
-                      <TouchableOpacity
-                        style={[styles.modalButton, styles.completeButton]}
-                        onPress={completeOrder}
-                      >
-                        <Text style={styles.modalButtonText}>Mark as Completed</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </ScrollView>
+          {/* Added Driver Management Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Driver Management</Text>
+              <Text style={styles.sectionCount}>({stats.totalDrivers})</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowDriverModal(true)}
+            >
+              <FontAwesome5 name="user-plus" size={16} color="#fff" />
+              <Text style={styles.addButtonText}>Assign New Driver</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.driversList}>
+              {drivers.length > 0 ? (
+                drivers.map((driver, index) => renderDriverItem({ item: driver, index }))
+              ) : (
+                <Text style={styles.emptyText}>No drivers assigned yet</Text>
               )}
             </View>
           </View>
-        </Modal>
+          
+          {/* Bottom spacing */}
+          <View style={{ height: 20 }} />
+        </ScrollView>
       </View>
+      
+      {/* Order Details Modal */}
+      <Modal visible={showOrderModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedOrder?.type === 'donation' ? 'Donation' : 'Request'} Details
+              </Text>
+              <TouchableOpacity onPress={() => setShowOrderModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedOrder && (
+              <ScrollView style={styles.modalScroll}>
+                {/* Order Information */}
+                <View style={styles.orderDetailSection}>
+                  <Text style={styles.orderDetailSectionTitle}>Order Information</Text>
+                  <Text style={styles.orderDetailText}>
+                    Order ID: #{selectedOrder.id}
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    Type: {selectedOrder.type === 'donation' ? 'Donation' : 'Request'}
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    Status: {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    Date: {selectedOrder.date}
+                  </Text>
+                </View>
+                
+                {/* User Information */}
+                <View style={styles.orderDetailSection}>
+                  <Text style={styles.orderDetailSectionTitle}>User Information</Text>
+                  <Text style={styles.orderDetailText}>
+                    Name: {selectedOrder.userName}
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    Email: {selectedOrder.userEmail}
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    Phone: {selectedOrder.userPhone}
+                  </Text>
+                </View>
+                
+                {/* Order Details */}
+                <View style={styles.orderDetailSection}>
+                  <Text style={styles.orderDetailSectionTitle}>
+                    {selectedOrder.type === 'donation' ? 'Donation' : 'Request'} Details
+                  </Text>
+                  <Text style={styles.orderDetailText}>
+                    People: {selectedOrder.people}
+                  </Text>
+                  {selectedOrder.type === 'donation' && (
+                    <>
+                      <Text style={styles.orderDetailText}>
+                        Food Type: {selectedOrder.foodType}
+                      </Text>
+                      <Text style={styles.orderDetailText}>
+                        Is New: {selectedOrder.isNew ? 'Yes' : 'No'}
+                      </Text>
+                      <Text style={styles.orderDetailText}>
+                        Is Consumable: {selectedOrder.isConsumable ? 'Yes' : 'No'}
+                      </Text>
+                    </>
+                  )}
+                  {selectedOrder.type === 'request' && (
+                    <Text style={styles.orderDetailText}>
+                      Reason: {selectedOrder.reason}
+                    </Text>
+                  )}
+                  <Text style={styles.orderDetailText}>
+                    Location: {selectedOrder.location}
+                  </Text>
+                </View>
+                
+                {/* Image */}
+                {selectedOrder.imageUri && (
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>Food Image</Text>
+                    <Image 
+                      source={{ uri: selectedOrder.imageUri }} 
+                      style={styles.orderDetailImage} 
+                    />
+                  </View>
+                )}
+                
+                {/* Driver Assignment (for pending orders) */}
+                {selectedOrder.status === 'pending' && (
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>Assign Driver</Text>
+                    <TextInput
+                      style={styles.driverInput}
+                      placeholder="Driver Name"
+                      value={driverName}
+                      onChangeText={setDriverName}
+                    />
+                    <TextInput
+                      style={styles.driverInput}
+                      placeholder="Driver Phone"
+                      value={driverPhone}
+                      onChangeText={setDriverPhone}
+                      keyboardType="phone-pad"
+                    />
+                    <TextInput
+                      style={styles.driverInput}
+                      placeholder={
+                        selectedOrder.type === 'donation' 
+                          ? 'Estimated Pickup Time' 
+                          : 'Estimated Delivery Time'
+                      }
+                      value={estimatedTime}
+                      onChangeText={setEstimatedTime}
+                    />
+                  </View>
+                )}
+                
+                {/* Driver Information (for approved orders) */}
+                {(selectedOrder.status === 'approved' || selectedOrder.status === 'completed') && (
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>Driver Information</Text>
+                    <Text style={styles.orderDetailText}>
+                      Name: {selectedOrder.driverName || 'Not assigned'}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      Phone: {selectedOrder.driverPhone || 'Not assigned'}
+                    </Text>
+                    <Text style={styles.orderDetailText}>
+                      {selectedOrder.type === 'donation' 
+                        ? `Estimated Pickup: ${selectedOrder.estimatedPickup || 'Not scheduled'}`
+                        : `Estimated Delivery: ${selectedOrder.estimatedDelivery || 'Not scheduled'}`
+                      }
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Points Information (only if awarded by driver) */}
+                {selectedOrder.status === 'completed' && selectedOrder.pointsEarned > 0 && (
+                  <View style={styles.orderDetailSection}>
+                    <Text style={styles.orderDetailSectionTitle}>Points Awarded</Text>
+                    <Text style={styles.orderDetailText}>
+                      The driver awarded {selectedOrder.pointsEarned} points for this donation.
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Action Buttons */}
+                <View style={styles.modalActions}>
+                  {selectedOrder.status === 'pending' && (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.approveButton]}
+                        onPress={approveOrder}
+                      >
+                        <Text style={styles.modalButtonText}>Approve Order</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.rejectButton]}
+                        onPress={rejectOrder}
+                      >
+                        <Text style={styles.modalButtonText}>Reject Order</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  
+                  {selectedOrder.status === 'approved' && (
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.completeButton]}
+                      onPress={completeOrder}
+                    >
+                      <Text style={styles.modalButtonText}>Mark as Completed</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Added Driver Assignment Modal */}
+      <Modal visible={showDriverModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign New Driver</Text>
+              <TouchableOpacity onPress={() => setShowDriverModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Driver Name</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter driver's full name"
+                value={newDriver.name}
+                onChangeText={(text) => setNewDriver({...newDriver, name: text})}
+              />
+              
+              <Text style={styles.inputLabel}>Username</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter username for login"
+                value={newDriver.username}
+                onChangeText={(text) => setNewDriver({...newDriver, username: text})}
+              />
+              
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter password for login"
+                secureTextEntry
+                value={newDriver.password}
+                onChangeText={(text) => setNewDriver({...newDriver, password: text})}
+              />
+              
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter driver's phone number"
+                value={newDriver.phone}
+                onChangeText={(text) => setNewDriver({...newDriver, phone: text})}
+              />
+              
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#ccc' }]}
+                  onPress={() => setShowDriverModal(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#2196F3' }]}
+                  onPress={handleAddDriver}
+                >
+                  <Text style={styles.modalButtonText}>Assign Driver</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ImageBackground>
   );
 }
@@ -901,7 +1123,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginTop: 5,
   },
   statLabel: {
     fontSize: 12,
@@ -936,7 +1157,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginRight: 5,
   },
   orderId: {
     fontSize: 14,
@@ -1063,6 +1283,65 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   
+  // Added Driver Management Styles
+  addButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  driversList: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  driverCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  driverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 8,
+  },
+  driverUsername: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+    textAlign: 'center',
+  },
+  deleteButton: {
+    backgroundColor: '#F44336',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1070,16 +1349,21 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
+    width: '100%',
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 30,
+    elevation: 10,
     maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    marginBottom: 20,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -1143,5 +1427,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  
+  // Added Driver Modal Styles
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333', 
+    marginBottom: 5,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 15,
+    backgroundColor: '#f9f9fa',
+    color: '#333',
   },
 });
