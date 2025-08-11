@@ -14,13 +14,13 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c07730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T18%3A06%3A40Z&ske%3D2025-07-29T18%3A06%3A40Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
-
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c57730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T18%3A06%3A40Z&ske%3D2025-07-29T18%3A06%3A40Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
 export default function DriverDashboard({ route, navigation }) {
   const { language, setLanguage, t, isRTL } = useContext(LanguageContext);
   const { driverData } = route.params || {};
@@ -35,12 +35,10 @@ export default function DriverDashboard({ route, navigation }) {
   const [driverLocation, setDriverLocation] = useState('');
   const [imageError, setImageError] = useState(false);
   const [pointsToAward, setPointsToAward] = useState('');
-
   // Load orders on component mount
   useEffect(() => {
     loadOrders();
   }, []);
-
   // Load orders from AsyncStorage
   const loadOrders = async () => {
     try {
@@ -82,14 +80,12 @@ export default function DriverDashboard({ route, navigation }) {
       setLoading(false);
     }
   };
-
   // Refresh orders
   const onRefresh = async () => {
     setRefreshing(true);
     await loadOrders();
     setRefreshing(false);
   };
-
   // Update order status
   const updateOrderStatus = async () => {
     if (!selectedOrder || !newStatus) return;
@@ -187,7 +183,6 @@ export default function DriverDashboard({ route, navigation }) {
       Alert.alert('Error', 'Failed to update order status');
     }
   };
-
   // Render order item
   const renderOrderItem = ({ item }) => {
     const statusColor = 
@@ -246,7 +241,6 @@ export default function DriverDashboard({ route, navigation }) {
       </TouchableOpacity>
     );
   };
-
   return (
     <ImageBackground source={{ uri: backgroundUri }} style={styles.background}>
       <View style={styles.container}>
@@ -329,7 +323,10 @@ export default function DriverDashboard({ route, navigation }) {
       
       {/* Order Details Modal */}
       <Modal visible={showOrderDetails} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Order Details</Text>
@@ -339,7 +336,7 @@ export default function DriverDashboard({ route, navigation }) {
             </View>
             
             {selectedOrder && (
-              <ScrollView style={styles.modalBody}>
+              <ScrollView style={styles.modalBody} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.detailSection}>
                   <Text style={styles.detailTitle}>Order Information</Text>
                   <Text style={styles.detailText}>Order ID: #{selectedOrder.id}</Text>
@@ -416,12 +413,15 @@ export default function DriverDashboard({ route, navigation }) {
               </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       
       {/* Status Update Modal */}
       <Modal visible={statusUpdateModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Update Order Status</Text>
@@ -442,8 +442,8 @@ export default function DriverDashboard({ route, navigation }) {
                 <>
                   <Text style={styles.inputLabel}>Points to Award</Text>
                   <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter points to award..."
+                    style={styles.textInputSmall}
+                    placeholder="Enter points..."
                     value={pointsToAward}
                     onChangeText={setPointsToAward}
                     keyboardType="numeric"
@@ -488,12 +488,11 @@ export default function DriverDashboard({ route, navigation }) {
               </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ImageBackground>
   );
 }
-
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -652,6 +651,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '90%',
+    paddingBottom: 30, // Added padding at the bottom
     elevation: 5,
   },
   modalHeader: {
@@ -669,6 +669,9 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 20,
+  },
+  scrollContent: {
+    paddingBottom: 30, // Added padding for scrollable content
   },
   detailSection: {
     marginBottom: 20,
@@ -706,6 +709,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 20,
+    marginBottom: 20, // Added margin at the bottom
   },
   actionButton: {
     flex: 0.48,
@@ -743,10 +747,20 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
+  textInputSmall: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 15,
+    height: 50, // Reduced height for points input
+  },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 20,
+    marginBottom: 20, // Added margin at the bottom
   },
   modalButton: {
     flex: 0.48,
