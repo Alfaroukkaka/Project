@@ -1,8 +1,8 @@
-// screens/FoodInteractionScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   TouchableOpacity,
   TextInput,
   Image,
@@ -27,7 +27,7 @@ import { LanguageContext } from '../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { triggerDashboardUpdate } from '../utils/StorageEvents';
 
-const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c07730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T18%3A06%3A40Z&ske%3D2025-07-29T18%3A06%3A40Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
+const backgroundUri = 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-921c-620a-af98-8aad4bc18e75/raw?se=2025-07-28T22%3A31%3A39Z&sp=r&sv=2024-08-04&sr=b%3Dscid%3D6d9d1348-659c-543f-b3c9-9a056b4dadb6&skoid%3Da3412ad4-1a13-47ce-91a5-c07730964f35&sktid%3Da48cca56-e6da-484e-a814-9c849652bcb3&skt%3D2025-07-28T19%3A29%3A10Z&ske%3D2025-07-29T19%3A29%3A10Z&sks%3Db&skv%3D2024-08-04&sig%3DmmdQBfXRs7Lj0oawM9bB0iG/Apj/eLBFsmCKhmAq7nw%3D';
 
 export default function FoodInteractionScreen() {
   const navigation = useNavigation();
@@ -355,39 +355,36 @@ export default function FoodInteractionScreen() {
     }
   };
   
-  // Handle marking order as done and award points
+  // Handle marking order as done (no automatic points)
   const handleMarkAsDone = async (orderId) => {
     try {
-      // Update the order to mark as acknowledged
-      const updatedOrders = activeOrders.map(order => 
-        order.id === orderId ? { ...order, acknowledged: true } : order
-      );
-      setActiveOrders(updatedOrders);
+      // Remove the order from active orders
+      const updatedActiveOrders = activeOrders.filter(order => order.id !== orderId);
+      setActiveOrders(updatedActiveOrders);
       
-      // Find the order to check if it's a donation and if points should be awarded
-      const order = activeOrders.find(o => o.id === orderId);
-      
-      // Award points only for completed donations that haven't been awarded points yet
-      if (order && order.type === 'donation' && order.status === 'completed' && !order.pointsAwarded) {
-        // Award 20 points for completed donation
-        const newPoints = points + 20;
-        setPoints(newPoints);
-        
-        // Update donation history to reflect points earned
-        const updatedDonationHistory = donationHistory.map(item => 
-          item.id === orderId ? { ...item, pointsEarned: 20 } : item
-        );
-        setDonationHistory(updatedDonationHistory);
-        
-        // Update the order to mark points as awarded
-        const finalUpdatedOrders = updatedOrders.map(o => 
-          o.id === orderId ? { ...o, pointsAwarded: true } : o
-        );
-        setActiveOrders(finalUpdatedOrders);
-        
-        // Show points award notification
-        Alert.alert('Points Awarded!', 'You earned 20 points for your completed donation!');
+      // Update AsyncStorage for active orders
+      if (userData.email && !isGuest) {
+        const usersJson = await AsyncStorage.getItem('users');
+        if (usersJson) {
+          const users = JSON.parse(usersJson);
+          const userIndex = users.findIndex(u => u.email === userData.email);
+          
+          if (userIndex !== -1) {
+            users[userIndex].activeOrders = updatedActiveOrders;
+            await AsyncStorage.setItem('users', JSON.stringify(users));
+          }
+        }
       }
+      
+      // Also update session data
+      const sessionData = {
+        points,
+        donationHistory,
+        activeOrders: updatedActiveOrders,
+        messages,
+        lastUpdated: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
       
       // Show confirmation
       Alert.alert('Order Completed', 'Thank you for your contribution!');
@@ -436,7 +433,7 @@ export default function FoodInteractionScreen() {
       paddingTop: 60,       
       paddingHorizontal: 20, 
       paddingBottom: 20, 
-      backgroundColor: darkMode ? 'rgba(18,18,18,0.9)' : 'rgba(255,255,255,0.9)',
+      backgroundColor: darkMode ? 'rgba(18,18,18,0.9)' : 'rgba(245,245,245,0.9)',
       direction: isRTL ? 'rtl' : 'ltr',
     },
     topRow: {
@@ -2072,7 +2069,7 @@ export default function FoodInteractionScreen() {
           {item.type === 'donation' && item.pointsAwarded && (
             <View style={dynamicStyles.orderDetail}>
               <Text style={dynamicStyles.orderLabel}>Points:</Text>
-              <Text style={dynamicStyles.orderValue}>+20</Text>
+              <Text style={dynamicStyles.orderValue}>+{item.pointsEarned || 0}</Text>
             </View>
           )}
           
@@ -2650,7 +2647,7 @@ export default function FoodInteractionScreen() {
                     4. Add a description for your donation{'\n'}
                     5. Take or upload a photo of the food{'\n'}
                     6. Enter your location and phone number{'\n'}
-                    7. Submit - earn 20 points when the driver completes the delivery!
+                    7. Submit - earn points when the driver completes the delivery!
                   </Text>
                   
                   <Text style={dynamicStyles.guideSubTitle}>🙏 Requesting Food:</Text>
@@ -2658,9 +2655,8 @@ export default function FoodInteractionScreen() {
                     1. Click "Request Food" on the main screen{'\n'}
                     2. Explain why you need food assistance{'\n'}
                     3. Specify how many people will be served{'\n'}
-                    4. Add a description for your request{'\n'}
-                    5. Enter your location and contact information{'\n'}
-                    6. Submit your request - we'll contact you soon!
+                    4. Enter your location and contact information{'\n'}
+                    5. Submit your request - we'll contact you soon!
                   </Text>
                   
                   <Text style={dynamicStyles.guideSubTitle}>🤖 AI Recipe Assistant:</Text>
@@ -2683,8 +2679,7 @@ export default function FoodInteractionScreen() {
                   
                   <Text style={dynamicStyles.guideSectionTitle}>🏆 Points System</Text>
                   <Text style={dynamicStyles.guideText}>
-                    Earn 20 points for each food donation when the driver completes the delivery. Points track your positive impact on reducing food waste 
-                    and supporting the community. The more you contribute, the more you help build a sustainable UAE!
+                    Earn points when drivers evaluate and complete your donations. The more you contribute, the more you help build a sustainable UAE!
                   </Text>
                   
                   <Text style={dynamicStyles.guideSectionTitle}>🌍 Environmental Impact</Text>
@@ -3230,7 +3225,7 @@ export default function FoodInteractionScreen() {
                       <View style={dynamicStyles.orderDetailsSection}>
                         <Text style={dynamicStyles.orderDetailsSectionTitle}>Points Earned</Text>
                         <Text style={dynamicStyles.orderDetailsText}>
-                          You earned 20 points for this completed donation!
+                          You earned {selectedOrder.pointsEarned || 0} points for this completed donation!
                         </Text>
                       </View>
                     )}
@@ -3364,8 +3359,8 @@ export default function FoodInteractionScreen() {
                   
                   <Text style={dynamicStyles.pointsInfoText}>
                     <Text style={dynamicStyles.boldText}>{t('howToEarnPoints')}</Text>
-                    {'\n'}• {t('donateFood')}: +20 {t('pointsWhenDriverCompletes')}
-                    {'\n'}• {t('helpCommunity')}
+                    {'\n'}• {t('donateFood')}: Points are awarded when drivers evaluate and complete your donations{'\n'}
+                    • {t('helpCommunity')}
                     {'\n'}• {t('reduceFoodWaste')}
                   </Text>
                   
@@ -3419,11 +3414,12 @@ export default function FoodInteractionScreen() {
                   <Text style={dynamicStyles.subTitle}>🍽️ {t('donatingFood')}:</Text>
                   <Text style={dynamicStyles.infoText}>
                     1. {t('clickDonateFood')}{'\n'}
-                    2. {t('specifyCookedUncooked')}{'\n'}
-                    3. {t('fillDetails')}{'\n'}
-                    4. {t('uploadPhoto')}{'\n'}
-                    5. {t('enterLocationPhone')}{'\n'}
-                    6. {t('submitEarnPointsWhenCompleted')}
+                    2. {t('fillPeopleServed')}{'\n'}
+                    3. {t('specifyFoodType')}{'\n'}
+                    4. {t('confirmSafe')}{'\n'}
+                    5. {t('uploadPhoto')}{'\n'}
+                    6. {t('enterLocationPhone')}{'\n'}
+                    7. {t('submitEarnPointsWhenCompleted')}
                   </Text>
                   
                   <Text style={dynamicStyles.subTitle}>🙏 {t('requestingFood')}:</Text>
